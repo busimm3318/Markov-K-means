@@ -12,3 +12,4 @@ experiments/results/markov_tail_*.csv
 experiments/results/oscillators_*.npz
 dist/
 build/
+experiments/results/auto_rule*.csv

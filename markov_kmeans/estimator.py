@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 
-from . import _markov as _mk
+from . import _rules
 from ._engines import HamerlyEngine, LloydEngine, MiniBatchEngine
 from ._kernels import as_data, compute_centers, inertia, soft_centers
 
@@ -17,20 +17,24 @@ class MarkovKMeans:
 
     The base algorithm (exact Lloyd via Hamerly bounds by default, plain Lloyd, or
     mini-batch) runs while the last ``window + 1`` labels of every point are kept in a
-    ring buffer.  It stops
+    ring buffer.  After each iteration the global state decides whether to stop
+    (``stop_rule="auto"``, see :mod:`markov_kmeans._rules`):
 
-    * at iteration ``t0`` when ``t0`` is given, or
-    * as soon as the *unstable set* U — points whose label changed within the last
-      ``window`` iterations — is at most ``unstable_tol`` of the data (checked from
-      iteration ``max(min_iter, window)`` on), or
-    * when the base algorithm converges / ``max_iter`` is reached.
+    * ``converged`` — no label changed (exact engines);
+    * ``few_unstable`` — the unstable set U (points whose label changed within the last
+      ``window`` iterations) is at most ``unstable_tol`` of the data: a drifting tail;
+    * ``oscillation`` — U is at most ``max_unstable`` of the data, at least ``osc_share``
+      of it switched twice or more within the window, and the per-iteration change counts
+      stopped decreasing: the remaining points keep oscillating and will not settle;
+    * ``t0`` / ``max_iter`` — fixed budget.
 
-    Each point of U is then settled by the Markov chain of its own label window: the
-    transition matrix is built from the observed moves (optionally Dirichlet-smoothed by
-    ``alpha`` and shrunk towards pooled moves by ``pooled_prior``) and the point goes to
-    the cluster with the largest long-run probability.  The long-run distribution is
-    also kept as a soft membership (``membership_``), e.g. ``[0.5, 0.5]`` for a point
-    that alternated between two clusters.
+    The points of U are then settled from their label windows (``assign_rule="auto"``):
+    a point that switched at most once (it moved and stayed) keeps its current label, a
+    point that switched twice or more gets its window occupancy (hard: most frequent label;
+    soft: the occupancy, e.g. ``[0.5, 0.5]``).  ``assign_rule="markov"`` uses the long-run
+    law of each point's Markov chain instead (optionally smoothed by ``alpha`` and shrunk
+    towards pooled moves by ``pooled_prior``); ``"frequency"`` the occupancy for every
+    point; ``"keep"`` the current label.
 
     Parameters
     ----------
@@ -38,16 +42,19 @@ class MarkovKMeans:
     algorithm : {"hamerly", "lloyd", "minibatch"}
     init : {"k-means++", "random"} or array of shape (n_clusters, n_features)
     t0 : int or None
-        Fixed stopping iteration; ``None`` uses the adaptive rule with ``unstable_tol``.
-    unstable_tol : float
-        Adaptive rule: stop once |U| / n <= unstable_tol.
+        Fixed stopping iteration (overrides ``stop_rule``).
+    stop_rule : {"auto", "unstable"}
+        "unstable" only uses ``unstable_tol`` (the 0.1.0 behaviour).
+    assign_rule : {"auto", "markov", "frequency", "keep"}
+    unstable_tol, max_unstable, osc_share, plateau_ratio : float
+        Thresholds of the stop rule (see above).
     min_iter, max_iter : int
     window : int
-        Length W of the label window that defines U and feeds the chains.
-    alpha : float
-        Dirichlet smoothing of transition counts (0 keeps absorbing states).
-    pooled_prior : float
-        Strength of the empirical-Bayes prior pooled over all unstable points.
+        Length W of the label window that defines U and feeds the assignment.
+    alpha, pooled_prior : float
+        Markov rule only: Dirichlet smoothing and pooled-prior strength.
+    oscillation_rule : {"frequency", "markov"}
+        How ``assign_rule="auto"`` settles oscillating points.
     center_update : {"auto", "hard", "soft", "none"}
         Final centers: centroids of the final labels ("hard"), weighted by the soft
         memberships ("soft"), or the base algorithm's current centers ("none").
@@ -62,22 +69,33 @@ class MarkovKMeans:
     cluster_centers_ : (n_clusters, n_features)
     labels_at_stop_ : (n,) labels of the base algorithm when it stopped
     unstable_indices_ : indices of U (empty if the base algorithm converged)
-    unstable_states_, unstable_probs_ : (|U|, window+1) visited clusters and long-run
+    unstable_states_, unstable_probs_ : (|U|, window+1) visited clusters and settlement
         probabilities of each point of U (states padded with -1)
-    uncertainty_ : (|U|,) 1 - max long-run probability
-    membership_ : scipy.sparse CSR (n, n_clusters); one-hot outside U, long-run law on U
-    n_iter_, stop_reason_, unstable_fraction_, inertia_, n_dist_, fit_seconds_
+    oscillating_ : (|U|,) bool, points of U that switched at least twice in the window
+    uncertainty_ : (|U|,) 1 - max probability
+    membership_ : scipy.sparse CSR (n, n_clusters); one-hot outside U, soft law on U
+    stop_reason_ : "converged", "few_unstable", "oscillation", "t0" or "max_iter"
+    regime_ : "converged", "drift" or "oscillation"
+    n_iter_, unstable_fraction_, oscillating_share_, change_counts_, inertia_, n_dist_,
+    fit_seconds_
     """
 
     def __init__(self, n_clusters=8, *, algorithm="hamerly", init="k-means++", t0=None,
-                 unstable_tol=1e-3, min_iter=10, max_iter=300, window=10, alpha=0.0,
-                 pooled_prior=0.0, center_update="auto", batch_size=4096, learning_rate="count",
-                 eta=2e-4, random_state=None):
+                 stop_rule="auto", assign_rule="auto", unstable_tol=1e-3, max_unstable=0.2,
+                 osc_share=0.3, plateau_ratio=0.8, min_iter=10, max_iter=300, window=10,
+                 alpha=0.0, pooled_prior=0.0, oscillation_rule="frequency", center_update="auto",
+                 batch_size=4096, learning_rate="count", eta=2e-4, random_state=None):
         self.n_clusters = n_clusters
         self.algorithm = algorithm
         self.init = init
         self.t0 = t0
+        self.stop_rule = stop_rule
+        self.assign_rule = assign_rule
         self.unstable_tol = unstable_tol
+        self.max_unstable = max_unstable
+        self.osc_share = osc_share
+        self.plateau_ratio = plateau_ratio
+        self.oscillation_rule = oscillation_rule
         self.min_iter = min_iter
         self.max_iter = max_iter
         self.window = window
@@ -126,31 +144,55 @@ class MarkovKMeans:
             raise ValueError("need 1 <= n_clusters <= n_samples")
         if W < 1:
             raise ValueError("window must be >= 1")
+        if self.stop_rule not in _rules.STOP_RULES:
+            raise ValueError(f"stop_rule must be one of {_rules.STOP_RULES}")
+        if self.assign_rule not in _rules.ASSIGN_RULES:
+            raise ValueError(f"assign_rule must be one of {_rules.ASSIGN_RULES}")
+        params = _rules.StopParams(W, self.min_iter, self.unstable_tol, self.max_unstable,
+                                   self.osc_share, self.plateau_ratio)
         engine = self._engine(X, self._initial_centers(X))
         dtype = np.uint8 if k <= 255 else (np.uint16 if k <= 65535 else np.int32)
         H = np.empty((W + 1, n), dtype=dtype)       # ring buffer of the last W+1 labelings
         H[0] = engine.labels
         last_change = np.full(n, -1, dtype=np.int32)
-        t, stop_reason, frac = 0, "max_iter", None
+        counts = []
+
+        def window_of(t, idx):
+            rows = [s_ % (W + 1) for s_ in range(max(0, t - W), t + 1)]
+            return H[np.ix_(rows, idx)]
+
+        def osc_share_of(t):
+            idx = np.flatnonzero(last_change > t - W)
+            return float((_rules.switches(window_of(t, idx)) >= 2).mean()) if len(idx) else 0.0
+
+        t, stop_reason, regime, osc = 0, "max_iter", "running", None
         while t < self.max_iter:
             changed = engine.step()
             t += 1
+            counts.append(changed)
             lab = engine.labels.astype(dtype)
             moved = lab != H[(t - 1) % (W + 1)]
             last_change[moved] = t
             H[t % (W + 1)] = lab
-            if changed == 0 and engine.exact:
-                stop_reason = "converged"
-                break
             if self.t0 is not None:
+                if changed == 0 and engine.exact:
+                    stop_reason = regime = "converged"
+                    break
                 if t >= self.t0:
                     stop_reason = "t0"
                     break
-            elif t >= max(self.min_iter, W):
-                frac = float((last_change > t - W).mean())
-                if frac <= self.unstable_tol:
-                    stop_reason = "few_unstable"
-                    break
+                continue
+            frac = float((last_change > t - W).mean())
+            osc = None
+            if (self.stop_rule == "auto" and t >= max(self.min_iter, W)
+                    and frac > self.unstable_tol and frac <= self.max_unstable):
+                osc = osc_share_of(t)
+            stop, regime = _rules.decide_stop(t, changed, frac, osc, counts, params, engine.exact,
+                                              rule=self.stop_rule)
+            if stop:
+                stop_reason = {"converged": "converged", "drift": "few_unstable",
+                               "oscillation": "oscillation"}[regime]
+                break
 
         L = engine.labels.copy()
         C = engine.centers
@@ -158,16 +200,17 @@ class MarkovKMeans:
             U = np.empty(0, dtype=np.int64)
             S = np.empty((0, W + 1), dtype=np.int64)
             P = np.empty((0, W + 1))
+            oscillating = np.empty(0, dtype=bool)
             labels = L
         else:
             U = np.flatnonzero(last_change > t - W).astype(np.int64)
-            rows = [s % (W + 1) for s in range(max(0, t - W), t + 1)]
-            Hw = np.ascontiguousarray(H[rows][:, U], dtype=np.int64)
-            prior = _mk.pooled_prior(Hw, k, self.pooled_prior) if self.pooled_prior > 0 else None
-            S, P = _mk.stationary(Hw, alpha=self.alpha, prior=prior)
             labels = L.copy()
-            if len(U):
-                labels[U] = _mk.argmax_label(S, P, L[U])
+            labels_U, S, P, oscillating = _rules.settle(
+                window_of(t, U), L[U], rule=self.assign_rule, alpha=self.alpha,
+                pooled_prior=self.pooled_prior, n_clusters=k, oscillation_rule=self.oscillation_rule)
+            labels[U] = labels_U
+            if regime == "running":   # stopped by t0 or max_iter: classify from the window
+                regime = "oscillation" if len(U) and oscillating.mean() >= self.osc_share else "drift"
 
         mode = self.center_update
         if mode == "auto":
@@ -190,6 +233,10 @@ class MarkovKMeans:
         self.uncertainty_ = 1.0 - P.max(1) if len(U) else np.empty(0)
         self.n_iter_ = t
         self.stop_reason_ = stop_reason
+        self.regime_ = regime
+        self.oscillating_ = oscillating
+        self.oscillating_share_ = float(oscillating.mean()) if len(U) else 0.0
+        self.change_counts_ = np.asarray(counts, dtype=np.int64)
         self.unstable_fraction_ = len(U) / n
         self.inertia_ = float(inertia(X, centers, labels))
         self.n_dist_ = int(engine.n_dist)
