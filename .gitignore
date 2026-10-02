@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.nbi
+*.nbc
+.pytest_cache/
+data/
+*.egg-info/
+benchmarks/results/raw/

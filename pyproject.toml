@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kmeans-accel"
+version = "0.1.0"
+description = "Research testbed for computational-efficiency methods of K-means clustering"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "numba", "scikit-learn", "threadpoolctl"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pandas", "matplotlib"]
+
+[tool.setuptools.packages.find]
+include = ["kmeans_accel*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
