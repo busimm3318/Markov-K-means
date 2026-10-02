@@ -12,6 +12,7 @@ import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.ticker  # noqa: E402,F401
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "experiments" / "results"
@@ -99,7 +100,8 @@ def lines(ax, frame, methods, col, labels=None, logy=False):
                 solid_capstyle="round")
     if logy:
         ax.set_yscale("log")
-    ax.legend(frameon=False, fontsize=8, labelcolor=INK2)
+    ax.legend(frameon=False, fontsize=8, labelcolor=INK2, loc="upper center", bbox_to_anchor=(0.5, -0.2),
+              ncol=3)
 
 
 def figures(df):
@@ -156,22 +158,23 @@ def figures(df):
     names = {"stop": "keep current label", "majority": "majority vote", "markov": "Markov (proposed)",
              "active_set_U": "active-set Lloyd on U", "hartigan_U": "Hartigan on U",
              "reassign_U": "reassign U to nearest", "markov_a0.5": "Markov, smoothed (α=0.5)"}
-    fig, axes = plt.subplots(1, 2, figsize=(11, 3.8))
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.6))
     for ax, reg, methods in ((axes[0], "exact", ["stop", "majority", "markov", "markov_a0.5", "active_set_U", "hartigan_U"]),
                              (axes[1], "minibatch", ["stop", "majority", "markov", "markov_a0.5", "reassign_U"])):
         lines(ax, df[df.regime == reg], methods, "U_err_rate", names)
-        _style(ax, f"{reg}: share of U left with a wrong label", "wrong labels in U / |U|")
-        ax.set_yscale("symlog", linthresh=1e-3)
+        _style(ax, f"{reg}: share of U left with a wrong label", "wrong labels in U / |U| (log)")
+        ax.set_yscale("log")
+        ax.yaxis.set_minor_formatter(matplotlib.ticker.LogFormatterSciNotation(minor_thresholds=(2, 0.5)))
     fig.tight_layout()
     fig.savefig(FIG / "fig3_error_in_U.png", dpi=150)
     plt.close(fig)
 
     # Fig 4: soft memberships — calibration against the converged label and error detection
-    soft = ["markov_soft", "markov_a0.5_soft", "markov_pooled_soft", "frequency_soft", "gmm_plugin_soft"]
-    snames = {"markov_soft": "Markov (proposed)", "markov_a0.5_soft": "Markov, smoothed α=0.5",
+    soft = ["markov_soft", "markov_a0.5_soft", "markov_pooled_soft", "frequency_soft", "gmm_plugin_soft", "stop"]
+    snames = {"stop": "keep current label (0/1)", "markov_soft": "Markov (proposed)", "markov_a0.5_soft": "Markov, smoothed α=0.5",
               "markov_pooled_soft": "Markov, pooled prior", "frequency_soft": "label frequency",
               "gmm_plugin_soft": "plug-in GMM posterior"}
-    fig, axes = plt.subplots(2, 2, figsize=(11, 7))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
     for col_i, reg in enumerate(["exact", "minibatch"]):
         d = df[df.regime == reg]
         lines(axes[0, col_i], d, soft, "brier_ref", snames)
@@ -206,10 +209,43 @@ def tables(df):
     return state, compute, err, soft, inst
 
 
+def oscillator_report():
+    """Reliability of fractional π: does π(a) match how often the point really ends in a?"""
+    rows = []
+    for f in sorted(RESULTS.glob("oscillators_*.npz")):
+        z = np.load(f)
+        if len(z["idx"]) == 0:
+            continue
+        regime = f.name.split("_")[1].split("-")[0]
+        out = (z["occ_a"] if regime == "minibatch" else (z["ref"] == z["a"]).astype(float))
+        for lo, hi in ((0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)):
+            for name, pred in (("markov_pi", z["pi_a"]), ("frequency", z["freq_a"]),
+                               ("model_posterior", z["model_a"] / np.maximum(z["model_a"] + z["model_b"], 1e-300))):
+                m = (pred >= lo) & (pred < hi) if hi < 1 else (pred >= lo)
+                if m.any():
+                    rows.append(dict(file=f.name, regime=regime, predictor=name, bin=f"[{lo:.1f},{hi:.1f})",
+                                     n=int(m.sum()), mean_pred=float(pred[m].mean()),
+                                     observed=float(out[m].mean())))
+        for name, pred in (("markov_pi", z["pi_a"]), ("frequency", z["freq_a"]),
+                           ("model_posterior", z["model_a"] / np.maximum(z["model_a"] + z["model_b"], 1e-300))):
+            rows.append(dict(file=f.name, regime=regime, predictor=name, bin="all", n=len(pred),
+                             mean_pred=float(pred.mean()), observed=float(out.mean()),
+                             brier=float(((pred - out) ** 2).mean()),
+                             corr=float(np.corrcoef(pred, out)[0, 1]) if pred.std() > 0 and out.std() > 0 else float("nan")))
+    rep = pd.DataFrame(rows)
+    if len(rep):
+        TABLES.mkdir(parents=True, exist_ok=True)
+        rep.to_csv(TABLES / "oscillator_reliability.csv", index=False)
+    return rep
+
+
 def main():
     df = load()
     figures(df)
     t = tables(df)
+    osc = oscillator_report()
+    if len(osc):
+        print(osc.to_string())
     print(t[4].to_string())
     print(f"rows={len(df)} instances={df.instance.nunique()}")
 
