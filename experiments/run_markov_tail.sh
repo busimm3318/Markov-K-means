@@ -25,10 +25,13 @@ minibatch() {
   done
 }
 highdim() {
-  for cfg in "128 50 0.35" "128 50 0.5"; do
+  # d=128 separations chosen by a pilot at n=1e6 (sep 0.25 / 0.35 converged in < 100 iterations)
+  for cfg in "128 50 0.5" "128 50 0.7"; do
     set -- $cfg
     OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python -m experiments.markov_tail --regime exact \
-      --n 1000000 --d "$1" --k "$2" --sep "$3" --seed 0
+      --n 2000000 --d "$1" --k "$2" --sep "$3" --seed 0
+    OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 python -m experiments.markov_tail --regime minibatch \
+      --n 2000000 --d "$1" --k "$2" --sep "$3" --seed 0 --epochs 200
   done
 }
 case "$queue" in
