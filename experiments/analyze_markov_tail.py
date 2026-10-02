@@ -41,8 +41,16 @@ def load():
     return derive(df)
 
 
+def group_of(n, d):
+    """main: n = 10^7, d = 16; highdim: d = 128; extreme: n = 3 x 10^7."""
+    if d >= 64:
+        return "highdim"
+    return "extreme" if n > 10_000_000 else "main"
+
+
 def derive(df):
     df = df.copy()
+    df["group"] = [group_of(n, d) for n, d in zip(df["n"], df["d"])]
     nk = df["lloyd_dist_iter"]
     # base algorithm cost up to T0 (Hamerly or mini-batch) and full run
     df["total_base_dist"] = df["prefix_base_dist"] + df["extra_dist"]
@@ -70,7 +78,7 @@ def derive(df):
     return df
 
 
-def summarize(df, cols, by=("regime", "T0", "method")):
+def summarize(df, cols, by=("regime", "group", "T0", "method")):
     agg = df.groupby(list(by))[cols].agg(["mean", "min", "max"])
     agg.columns = [f"{c}_{s}" for c, s in agg.columns]
     return agg.reset_index()
@@ -197,7 +205,7 @@ def figures(df):
 def tables(df):
     TABLES.mkdir(parents=True, exist_ok=True)
     state = summarize(df[df.method == "stop"], ["frac_U", "n_U", "n_V", "n_U_and_V", "U_disagree_at_T0",
-                                                "n_disagree", "changes_at_T0"], by=("regime", "T0"))
+                                                "n_disagree", "changes_at_T0"], by=("regime", "group", "T0"))
     state.to_csv(TABLES / "state_per_T0.csv", index=False)
     compute = summarize(df, ["save_dist_vs_lloyd_full", "save_dist_vs_base_full", "save_sec_vs_lloyd_full",
                              "save_sec_vs_base_full", "extra_dist", "extra_seconds"])
@@ -287,7 +295,7 @@ def fig5(rep):
         _style(ax, f"{RNAME[reg]} (T0 ≥ 20, {n} points)", "observed share ending in a", "predicted probability of state a")
         ax.set_ylim(-0.02, 1.05)
         ax.set_xlim(0.47, 1.0)
-        leg = ax.legend(frameon=False, fontsize=8, labelcolor=INK2, loc="upper center", bbox_to_anchor=(0.5, -0.2),
+        ax.legend(frameon=False, fontsize=8, labelcolor=INK2, loc="upper center", bbox_to_anchor=(0.5, -0.2),
                         ncol=2, markerscale=0.5)
     fig.tight_layout()
     fig.savefig(FIG / "fig5_fractional_reliability.png", dpi=150)
@@ -378,13 +386,14 @@ def report_tables(df, rep):
         rb["key"] = rb.regime + " / " + rb.predictor
         T["osc_bins"] = md(rb.pivot_table(index="key", columns="bin", values="cell", aggfunc="first"), "{}",
                            index_name="체제 / 예측기")
-    inst = df.groupby("instance").agg(regime=("regime", "first"), n=("n", "first"), d=("d", "first"), k=("k", "first"),
+    inst = df.groupby("instance").agg(regime=("regime", "first"), group=("group", "first"), n=("n", "first"),
+                                      d=("d", "first"), k=("k", "first"),
                                       sep=("sep", "first"), seed=("seed", "first"), T_conv=("T_conv", "first"),
                                       acc=("ref_acc_truth", "first"))
     inst = inst.reset_index(drop=True)
     inst.index = range(1, len(inst) + 1)
     T["instances"] = md(inst, {"n": "{:,}", "d": "{}", "k": "{}", "sep": "{}", "seed": "{}", "T_conv": "{}",
-                               "acc": "{:.3f}", "regime": "{}"}, index_name="#")
+                               "acc": "{:.3f}", "regime": "{}", "group": "{}"}, index_name="#")
     return T
 
 
@@ -397,17 +406,56 @@ def fill_report(T, path=ROOT / "docs" / "results.md"):
 
     def sub(m):
         key = m.group(1)
-        return f"<!-- TABLE:{key} -->\n{T.get(key, '_(아직 결과 없음)_')}\n<!-- /TABLE -->"
+        if key not in T:      # filled by another analysis script
+            return m.group(0)
+        return f"<!-- TABLE:{key} -->\n{T[key]}\n<!-- /TABLE -->"
 
     path.write_text(re.sub(r"<!-- TABLE:(\w+) -->.*?<!-- /TABLE -->", sub, text, flags=re.S))
 
 
+def group_tables(df):
+    """Compact per-T0 summaries of the high-dimensional and the 3 x 10^7 instances."""
+    T = {}
+    for grp in ("highdim", "extreme"):
+        for reg in REGIMES:
+            d = df[(df.group == grp) & (df.regime == reg)]
+            if d.empty:
+                continue
+            st = d[d.method == "stop"].groupby("T0")
+            out = pd.DataFrame({"|U|/n": st.frac_U.mean(),
+                                "|U∩V|/|V|": st.n_U_and_V.sum() / st.n_V.sum()})
+            mk_ = d[d.method == "markov"].groupby("T0")
+            if reg == "exact":
+                out["거리 절감 vs Lloyd"] = mk_.save_dist_vs_lloyd_full.mean()
+                out["시간 절감 vs Hamerly"] = mk_.save_sec_vs_base_full.mean()
+            else:
+                out["시간 절감 vs 200 epoch"] = mk_.save_sec_vs_base_full.mean()
+            e = d[d.method.isin(["stop", "markov", "majority"])].pivot_table(index="T0", columns="method",
+                                                                              values="U_err_rate", aggfunc="mean")
+            for m, lab in (("stop", "U 오류: 유지"), ("markov", "U 오류: Markov"), ("majority", "U 오류: 다수결")):
+                out[lab] = e[m]
+            so = d[d.method.isin(["markov_soft", "gmm_plugin_soft"])].pivot_table(
+                index="T0", columns="method", values=["frac_fractional", "auroc_err_ref"], aggfunc="mean")
+            out["분수형 π 비율"] = so[("frac_fractional", "markov_soft")]
+            out["AUROC Markov soft"] = so[("auroc_err_ref", "markov_soft")]
+            out["AUROC GMM"] = so[("auroc_err_ref", "gmm_plugin_soft")]
+            fmt = {c: "{:.1%}" for c in out.columns}
+            fmt.update({"|U|/n": "{:.3%}", "AUROC Markov soft": "{:.3f}", "AUROC GMM": "{:.3f}"})
+            T[f"{grp}_{reg}"] = md(out, fmt)
+    return T
+
+
 def main():
     df = load()
-    figures(df)
+    main_df = df[df.group == "main"]
+    figures(main_df)
     t = tables(df)
     osc = oscillator_report()
-    fill_report(report_tables(df, osc))
+    T = report_tables(main_df, osc)
+    T.update(group_tables(df))
+    inst = report_tables(df, osc)["instances"]
+    T["instances"] = inst
+    fill_report(T)
     if len(osc):
         print(osc.to_string())
     print(t[4].to_string())

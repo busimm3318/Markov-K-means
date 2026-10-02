@@ -267,6 +267,37 @@ def markov(X, L, C_T, U, Hw, alpha=0.0, window=None, pooled=0.0, soft=False, fix
                       extra={"markov_seconds": t_markov, "mean_states": float((S >= 0).sum(1).mean())})
 
 
+def switch_rule(X, L, C_T, U, Hw, fixed=False, soft=False, min_switches=2):
+    """Hybrid: drifters keep their current label, oscillators get their window occupancy.
+
+    A point whose label changed at most once in the window (a single move, i.e. an
+    absorbing history) keeps its current label; a point that switched ``min_switches``
+    times or more is settled by the empirical occupancy of the window (hard = most
+    frequent label, ties -> current; soft = the occupancy itself).
+    """
+    t = time.perf_counter()
+    k = C_T.shape[0]
+    H = np.asarray(Hw)
+    S, F = mk.frequency(H)
+    osc = (H[1:] != H[:-1]).sum(0) >= min_switches
+    cur = L[U]
+    S = S.copy()
+    F = F.copy()
+    keep = ~osc
+    S[keep] = -1
+    F[keep] = 0.0
+    S[keep, 0] = cur[keep]
+    F[keep, 0] = 1.0
+    lab = L.copy()
+    lab[U] = mk.argmax_label(S, F, cur)
+    if soft and not fixed:
+        C, passes = soft_centers(X, L, U, S, F, C_T), 1
+    else:
+        C, passes = _finish(X, lab, C_T, fixed)
+    return TailResult(lab, C, 0, passes, time.perf_counter() - t, soft=(S, F) if soft else None,
+                      extra={"frac_oscillating": float(osc.mean()) if len(osc) else 0.0})
+
+
 def reassign_all(X, L, C_T, U, Hw, chunk=1 << 16):
     """Nearest-center assignment of every point to the fixed centers C_T (n k distances)."""
     t = time.perf_counter()

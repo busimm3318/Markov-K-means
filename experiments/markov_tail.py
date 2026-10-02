@@ -62,6 +62,8 @@ def strategies(regime):
         "markov_pooled_soft": (partial(tail.markov, fixed=fixed, pooled=2.0, soft=True), True),
         "markov_w5": (partial(tail.markov, fixed=fixed, window=5), False),
         "markov_w20": (partial(tail.markov, fixed=fixed, window=20), False),
+        "switch_rule": (partial(tail.switch_rule, fixed=fixed), False),
+        "switch_rule_soft": (partial(tail.switch_rule, fixed=fixed, soft=True), True),
     }
     if regime == "exact":
         s["active_set_U"] = (tail.active_set, False)

@@ -15,7 +15,8 @@ def blobs():
 def test_runs_to_convergence_equals_lloyd(blobs, algorithm):
     C0 = datasets.init_random(blobs, 12, seed=1)
     ref = lloyd(blobs, C0, max_iter=1000)
-    mk = MarkovKMeans(12, algorithm=algorithm, init=C0, unstable_tol=0.0, max_iter=1000).fit(blobs)
+    mk = MarkovKMeans(12, algorithm=algorithm, init=C0, stop_rule="unstable", unstable_tol=0.0,
+                      max_iter=1000).fit(blobs)
     assert mk.stop_reason_ == "converged"
     assert len(mk.unstable_indices_) == 0
     np.testing.assert_array_equal(mk.labels_, ref.labels)
@@ -25,7 +26,7 @@ def test_runs_to_convergence_equals_lloyd(blobs, algorithm):
 
 def test_fixed_t0_settles_exactly_the_unstable_set(blobs):
     C0 = datasets.init_random(blobs, 12, seed=1)
-    mk = MarkovKMeans(12, init=C0, t0=6, window=4).fit(blobs)
+    mk = MarkovKMeans(12, init=C0, t0=6, window=4, assign_rule="markov").fit(blobs)
     assert mk.stop_reason_ == "t0" and mk.n_iter_ == 6
     stable = np.ones(len(blobs), bool)
     stable[mk.unstable_indices_] = False
@@ -45,7 +46,7 @@ def test_adaptive_stop_rule(blobs):
     if mk.stop_reason_ == "few_unstable":
         assert mk.unstable_fraction_ <= 0.02
         assert mk.n_iter_ >= 5
-    assert mk.stop_reason_ in ("few_unstable", "converged")
+    assert mk.stop_reason_ in ("few_unstable", "converged", "oscillation")
     assert mk.n_dist_ > 0 and mk.inertia_ > 0
 
 
@@ -106,3 +107,161 @@ def test_package_is_standalone(tmp_path):
             "assert 'kmeans_accel' not in sys.modules, 'research package imported'; print('ok')")
     r = subprocess.run([sys.executable, "-c", code], cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout.strip() == "ok", r.stderr
+
+
+# ----------------------------------------------------------------------------- decision rules
+
+from markov_kmeans import _rules  # noqa: E402
+
+
+def _monitor(n=1000, k=2, **kw):
+    params = _rules.StopParams(window=4, min_iter=4, **kw)
+    return _rules.StateMonitor(n, k, params, exact=False)
+
+
+def _run(mon, steps, labels_at, centers_at):
+    out = None
+    for t in range(steps + 1):
+        mon.push(labels_at(t), centers_at(t))
+        if t:
+            out = mon.assess()
+            if out[0]:
+                return t, out
+    return steps, out
+
+
+def test_monitor_intervenes_on_stable_oscillation():
+    base = np.r_[np.zeros(500, int), np.ones(500, int)]
+    C = np.array([[0.0, 0.0], [10.0, 0.0]])
+
+    def labels(t):          # 20 points (2%) swap clusters every iteration, the rest are fixed
+        lab = base.copy()
+        lab[:20] = t % 2
+        return lab
+
+    t, (stop, regime, state) = _run(_monitor(), 30, labels, lambda t: C)
+    assert stop and regime == "oscillation", state
+    assert state["representatives_stable"] and state["partitions_stable"]
+    assert state["oscillating_share"] == 1.0
+
+
+def test_monitor_waits_while_representatives_move():
+    base = np.r_[np.zeros(500, int), np.ones(500, int)]
+
+    def labels(t):
+        lab = base.copy()
+        lab[:20] = t % 2
+        return lab
+
+    def centers(t):          # center 0 travels a large, quickly shrinking distance
+        return np.array([[3.0 * 0.7 ** t, 0.0], [10.0, 0.0]])
+
+    mon = _monitor()
+    t, (stop, regime, state) = _run(mon, 40, labels, centers)
+    early = [s_ for s_ in mon.trace if "representatives_stable" in s_][:3]
+    assert early and not any(s_["representatives_stable"] for s_ in early)
+    assert all(s_["decision"] == "continue" for s_ in early)
+    if stop:                 # intervention only once the centers have settled
+        assert state["representatives_stable"] and state["center_drift"] <= mon.params.center_tol
+
+
+def test_monitor_waits_while_a_cluster_reorganises():
+    C = np.array([[0.0, 0.0], [10.0, 0.0]])
+
+    def labels(t):           # cluster 0 loses 10 members per iteration, all to cluster 1
+        lab = np.r_[np.zeros(500, int), np.ones(500, int)]
+        lab[:min(10 * t, 300)] = 1
+        return lab
+
+    t, (stop, regime, state) = _run(_monitor(max_unstable=0.2), 25, labels, lambda t: C)
+    assert not stop and not state["partitions_stable"] and state["net_flow"] == 1.0, state
+
+
+def test_monitor_accepts_a_balanced_oscillation_of_many_members():
+    C = np.array([[0.0, 0.0], [10.0, 0.0]])
+
+    def labels(t):           # 15% of cluster 0 flips back and forth: moves balance out
+        lab = np.r_[np.zeros(500, int), np.ones(500, int)]
+        lab[:75] = t % 2
+        return lab
+
+    t, (stop, regime, state) = _run(_monitor(max_unstable=0.2), 30, labels, lambda t: C)
+    assert state["cluster_unstable"] > 0.1 and state["net_flow"] == 0.0
+    assert stop and regime == "oscillation" and state["partitions_stable"], state
+
+
+def test_monitor_tail_and_convergence():
+    mon = _rules.StateMonitor(1000, 2, _rules.StopParams(window=4, min_iter=4), exact=True)
+    lab = np.r_[np.zeros(500, int), np.ones(500, int)]
+    C = np.array([[0.0, 0.0], [10.0, 0.0]])
+    mon.push(lab, C)
+    for t in range(1, 3):
+        mon.push(lab, C, changed=0 if t == 2 else 1)
+        stop, regime, _ = mon.assess()
+    assert (stop, regime) == (True, "converged")
+    assert _rules.projected_changes([100, 50, 25, 12], 4, 1000) < 0.02
+    assert _rules.projected_changes([10, 10, 10, 10], 4, 1000) == float("inf")
+
+
+def test_settle_auto_keeps_drifters_and_averages_oscillators():
+    hist = np.array([[0, 0, 0, 0, 0, 1, 1, 1],      # drift: keep current label 1
+                     [0, 1, 1, 1, 0, 0, 1, 1],      # 3 switches: occupancy 0.375 / 0.625
+                     [2, 2, 2, 2, 2, 2, 2, 2]]).T
+    labels, S, P, osc = _rules.settle(hist, hist[-1], rule="auto")
+    assert list(labels) == [1, 1, 2]
+    assert list(osc) == [False, True, False]
+    from markov_kmeans._markov import to_dense
+    D = to_dense(S, P, 3)
+    np.testing.assert_allclose(D[0], [0, 1, 0])
+    np.testing.assert_allclose(D[1], [3 / 8, 5 / 8, 0])
+    lab_k, _, _, _ = _rules.settle(hist, hist[-1], rule="keep")
+    np.testing.assert_array_equal(lab_k, hist[-1])
+
+
+def test_auto_detects_persistent_oscillation():
+    X = datasets.blobs(30000, 4, 8, sep=1.0, seed=5)
+    mk = MarkovKMeans(8, algorithm="minibatch", learning_rate="constant", eta=1e-3, batch_size=1024,
+                      max_iter=120, random_state=0).fit(X)
+    assert mk.stop_reason_ == "oscillation", (mk.stop_reason_, mk.n_iter_, mk.unstable_fraction_)
+    assert mk.regime_ == "oscillation" and mk.oscillating_share_ >= 0.3
+    assert mk.n_iter_ < 120
+    last = mk.decision_trace_[-1]
+    assert last["decision"] == "oscillation" and last["representatives_stable"] and last["partitions_stable"]
+
+
+def test_settle_in_oscillation_regime_uses_occupancy_for_every_point():
+    hist = np.array([[0, 0, 0, 0, 0, 1, 1, 1],      # one switch: kept in drift, occupancy here
+                     [0, 1, 0, 1, 0, 1, 0, 1]]).T
+    labels, S, P, osc = _rules.settle(hist, hist[-1], rule="auto", regime="oscillation")
+    from markov_kmeans._markov import to_dense
+    D = to_dense(S, P, 2)
+    np.testing.assert_allclose(D[0], [5 / 8, 3 / 8])
+    assert list(labels) == [0, 1]
+    labels_d, _, _, _ = _rules.settle(hist, hist[-1], rule="auto", regime="drift")
+    assert list(labels_d) == [1, 1]
+
+
+def test_monitor_waits_while_centers_travel_under_jitter():
+    base = np.r_[np.zeros(500, int), np.ones(500, int)]
+
+    def labels(t):
+        lab = base.copy()
+        lab[:20] = t % 2
+        return lab
+
+    def centers(drift):
+        rng = np.random.default_rng(0)
+        jitter = rng.normal(scale=0.04, size=(61, 2, 2))
+        return lambda t: np.array([[0.0, 0.0], [10.0, 0.0]]) + jitter[t] + [[drift * t, 0.0], [0.0, 0.0]]
+
+    params = _rules.StopParams(window=10, min_iter=10)
+    # jitter at a noise floor, but center 0 keeps moving one way: not stable yet
+    mon = _rules.StateMonitor(1000, 2, params, exact=False)
+    t, (stop, regime, state) = _run(mon, 60, labels, centers(0.04))
+    assert not stop, (t, state)
+    assert state["center_drift"] <= params.center_noise_tol and state["center_travel"] > params.travel_ratio
+    # the same jitter around fixed centers: stable, the oscillation is settled
+    mon = _rules.StateMonitor(1000, 2, params, exact=False)
+    t, (stop, regime, state) = _run(mon, 60, labels, centers(0.0))
+    assert stop and regime == "oscillation", state
+    assert state["center_travel"] <= params.travel_ratio
