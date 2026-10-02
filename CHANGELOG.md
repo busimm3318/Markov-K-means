@@ -31,9 +31,9 @@
 
 ### Evaluation
 * On 10 instances at n = 1e6 (exact Lloyd, 1/count and constant-step mini-batch) the
-  automatic rule uses 7–83% of the full run's time at an error of 0.05–0.62%.
+  automatic rule uses 6–83% of the full run's time at an error of 0.05–0.62%.
   * With a constant step, scikit-learn's tolerance rule and the 0.1.0 rule never stop.
-    The automatic rule stops at 7–68% of the run with an error close to that of the
+    The automatic rule stops at 10–62% of the run with an error close to that of the
     full run.
   * See docs/results.md, section 6.
 
