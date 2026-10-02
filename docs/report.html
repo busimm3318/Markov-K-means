@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Markov-K-means 중간 보고서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@600;700&display=swap">
+<style>
+/* Layout: one reading column (~46rem) for prose, figures and tables allowed to widen to 70rem. */
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --ink: #15181d;
+  --muted: #5a6170;
+  --line: #dfe3e9;
+  --accent: #2a78d6;
+  --accent-soft: #e6f0fb;
+  --good: #1f7a46; --good-bg: #e5f4ea;
+  --warn: #9a5b00; --warn-bg: #fdf0d9;
+  --bad: #b23a2b;  --bad-bg: #fbe7e4;
+  --lab-a: #2a78d6; --lab-b: #eb6834;
+  --chart-ground: #fcfcfb;
+  --font-display: "Noto Serif KR", "Nanum Myeongjo", Georgia, serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101317; --surface: #181c22; --ink: #e9ecf1; --muted: #a2a9b6; --line: #2b313a;
+    --accent: #5b9cec; --accent-soft: #1a2a3f;
+    --good: #6cc792; --good-bg: #16301f; --warn: #e8b45a; --warn-bg: #33270f; --bad: #f08a7c; --bad-bg: #3a1c18;
+    --lab-a: #3987e5; --lab-b: #d95926; --chart-ground: #fcfcfb;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101317; --surface: #181c22; --ink: #e9ecf1; --muted: #a2a9b6; --line: #2b313a;
+  --accent: #5b9cec; --accent-soft: #1a2a3f;
+  --good: #6cc792; --good-bg: #16301f; --warn: #e8b45a; --warn-bg: #33270f; --bad: #f08a7c; --bad-bg: #3a1c18;
+  --lab-a: #3987e5; --lab-b: #d95926; --chart-ground: #fcfcfb;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body);
+  font-size: 1rem; line-height: 1.7; padding-inline: 16px; padding-block: 0 4rem;
+  -webkit-font-smoothing: antialiased; word-break: keep-all; overflow-wrap: break-word;
+}
+.wrap { max-width: 70rem; margin-inline: auto; }
+.prose { max-width: 46rem; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.3; margin: 0; }
+h1 { font-size: clamp(1.9rem, 1.4rem + 2vw, 2.7rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.55rem; font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 600; font-family: var(--font-body); }
+p { margin: 0; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+header.top { padding-block: 3.5rem 2rem; display: grid; gap: 1.1rem; border-bottom: 1px solid var(--line); }
+.lede { font-size: 1.08rem; color: var(--muted); max-width: 46rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta b { color: var(--ink); font-weight: 500; }
+.status { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.8rem; font-weight: 500; border: 1px solid var(--line); background: var(--surface); }
+.pill .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--muted); }
+.pill.done .dot { background: var(--good); }
+.pill.run .dot { background: var(--warn); }
+
+section { padding-block: 2.75rem 0; display: grid; gap: 1.25rem; }
+section > header { display: grid; gap: 0.35rem; }
+
+.verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
+.verdict { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.25rem; display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
+.verdict .q { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); letter-spacing: 0.04em; }
+.verdict h3 { font-size: 1.05rem; }
+.chip { justify-self: start; font-size: 0.78rem; font-weight: 600; padding: 0.15rem 0.6rem; border-radius: 6px; }
+.chip.good { color: var(--good); background: var(--good-bg); }
+.chip.warn { color: var(--warn); background: var(--warn-bg); }
+.chip.bad { color: var(--bad); background: var(--bad-bg); }
+.kv { display: grid; gap: 0.35rem; font-size: 0.9rem; }
+.kv div { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px dashed var(--line); padding-top: 0.35rem; }
+.kv span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.patterns { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+.pattern { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; display: grid; gap: 0.6rem; min-width: 0; }
+.pattern .name { font-weight: 600; }
+.seq { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.lab { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 500; width: 1.6rem; height: 1.6rem; display: inline-grid; place-items: center; border-radius: 5px; color: #fff; }
+.lab-a { background: var(--lab-a); }
+.lab-b { background: var(--lab-b); }
+.pattern .pi { font-family: var(--font-mono); font-size: 0.88rem; }
+.pattern .note { font-size: 0.88rem; color: var(--muted); }
+
+ul.points { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.5rem; }
+ul.points li::marker { color: var(--accent); }
+.callout { background: var(--accent-soft); border-radius: 8px; padding: 0.9rem 1.1rem; max-width: 46rem; }
+
+figure.chart { margin: 0; display: grid; gap: 0.5rem; }
+.chart-frame { background: var(--chart-ground); border: 1px solid var(--line); border-radius: 10px; padding: 0.75rem; overflow-x: auto; }
+.chart-frame img { display: block; width: 100%; height: auto; min-width: 40rem; }
+figcaption { font-size: 0.88rem; color: var(--muted); max-width: 46rem; }
+.fig-no { font-family: var(--font-mono); color: var(--ink); margin-right: 0.5rem; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table.data { border-collapse: collapse; width: 100%; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+table.data caption { text-align: left; padding: 0.7rem 0.9rem 0; font-weight: 600; }
+table.data th, table.data td { padding: 0.45rem 0.75rem; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+table.data th { font-weight: 600; color: var(--muted); font-size: 0.78rem; background: var(--bg); }
+table.data th:first-child, table.data td:first-child { text-align: left; font-family: var(--font-mono); }
+table.data tbody tr:last-child td { border-bottom: 0; }
+table.data td strong, table.data th strong { color: var(--accent); }
+.table-title { font-weight: 600; font-size: 0.95rem; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.9rem; }
+details > summary { cursor: pointer; font-weight: 500; }
+details[open] > summary { margin-bottom: 0.75rem; }
+details .table-wrap { border: 0; }
+summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+table.data.left th, table.data.left td { text-align: left; white-space: normal; min-width: 8rem; }
+.pending { color: var(--muted); font-style: italic; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1rem; }
+.grid2 > * { min-width: 0; display: grid; gap: 0.5rem; align-content: start; }
+pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem 1rem; overflow-x: auto; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.6; margin: 0; }
+footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--muted); display: grid; gap: 0.75rem; }
+@media (max-width: 30rem) { .chart-frame img { min-width: 34rem; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">Markov-K-means · 중간 보고서</div>
+  <h1>비수렴 벡터의 Markov 연쇄 편입</h1>
+  <p class="lede">K-means가 충분히 반복된 뒤에도 클러스터 주소가 바뀌는 극소수 벡터를, 각자의 라벨 이력으로 만든 Markov 연쇄의 정상분포로 편입하는 알고리즘을 평가했다. 계산량, 오차, 연속 해석(예: π = [0.5, 0.5]) 세 가지를 T₀ = 10, 20, …, 90마다 같은 상태에서 비교했다.</p>
+  <div class="meta">
+    <span>N <b>10⁷</b></span><span>d <b>16</b></span><span>k <b>50 · 100</b></span>
+    <span>수렴 조건 <b>≥ 100회</b></span><span>창 W <b>10</b></span><span>2026-10-02 13:00 기준</span>
+  </div>
+  <div class="status">
+    <span class="pill done"><span class="dot"></span>일반 Lloyd 8/8 사례</span>
+    <span class="pill run"><span class="dot"></span>mini-batch 3/4 사례</span>
+    <span class="pill run"><span class="dot"></span>고정 학습률 · d=128 · N=3×10⁷ 진행 중</span>
+  </div>
+</header>
+
+<section id="glance">
+  <header><div class="eyebrow">한눈에 보기</div><h2>세 질문에 대한 현재 답</h2></header>
+  <div class="verdicts">
+    <article class="verdict">
+      <div class="q">RQ1 · 계산량</div>
+      <span class="chip good">크게 절감, 단 "멈춤"의 효과</span>
+      <h3>T₀에서 멈추면 꼬리 반복이 통째로 사라진다</h3>
+      <div class="kv">
+        <div><span>거리 계산 vs Lloyd 끝까지</span><span>−81 ~ −98%</span></div>
+        <div><span>거리 계산 vs Hamerly 끝까지</span><span>−16 ~ −38%</span></div>
+        <div><span>시간 vs Hamerly 끝까지</span><span>−52 ~ −68%</span></div>
+        <div><span>Markov 편입 비용 (T₀≥30)</span><span>0.3 ~ 0.6 s</span></div>
+      </div>
+    </article>
+    <article class="verdict">
+      <div class="q">RQ2 · 오차</div>
+      <span class="chip warn">현재 라벨 유지와 같은 수준</span>
+      <h3>다수결의 함정은 피하지만 개선은 없다</h3>
+      <div class="kv">
+        <div><span>U 내부 오류, Markov − 유지</span><span>+0 ~ 1.1%p</span></div>
+        <div><span>U 내부 오류, 다수결</span><span>43 ~ 53%</span></div>
+        <div><span>전체 오류 중 U 밖 비중 (T₀≥20)</span><span>90% 이상</span></div>
+      </div>
+    </article>
+    <article class="verdict">
+      <div class="q">RQ3 · 연속 해석</div>
+      <span class="chip bad">소속 비율로는 지지되지 않음</span>
+      <h3>분수형 π는 드물고, 결국 한 군집에 정착한다</h3>
+      <div class="kv">
+        <div><span>π가 분수인 U 비율 (T₀≥20)</span><span>0.5 ~ 4%</span></div>
+        <div><span>장기적으로 실제 나눠 쓰는 비율</span><span>0 ~ 2%</span></div>
+        <div><span>틀릴 점 탐지 AUROC (mini-batch, T₀=90)</span><span>0.76</span></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section id="method">
+  <header><div class="eyebrow">알고리즘</div><h2>라벨 이력 → 전이행렬 → 장기 분포 π</h2></header>
+  <p class="prose">T₀ 직전 10회 사이에 라벨이 바뀐 점(비수렴 집합 U)마다, 방문한 클러스터 사이의 전이 횟수로 전이행렬을 만든다. 현재 라벨에서 출발한 연쇄의 장기 분포 π를 구해 hard(argmax π) 또는 soft(π 자체를 소속도)로 편입한다. 실험에서 실제로 관찰된 세 가지 이력 패턴이 결과를 대부분 설명한다.</p>
+  <div class="patterns">
+    <div class="pattern">
+      <div class="name">표류 (가장 흔함)</div>
+      <div class="seq"><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-b">B</span><span class="lab lab-b">B</span><span class="lab lab-b">B</span></div>
+      <div class="pi">π = [0, 1] → B</div>
+      <div class="note">B가 흡수 상태라 B로 편입한다. 다수결은 A를 골라 틀린다. Markov의 확실한 장점이다.</div>
+    </div>
+    <div class="pattern">
+      <div class="name">진동</div>
+      <div class="seq"><span class="lab lab-a">A</span><span class="lab lab-b">B</span><span class="lab lab-a">A</span><span class="lab lab-b">B</span><span class="lab lab-a">A</span><span class="lab lab-b">B</span></div>
+      <div class="pi">π = [0.5, 0.5]</div>
+      <div class="note">연속 해석의 대상이다. 다만 U의 0.5~4%에서만 나타나고, 대부분 나중에 한쪽으로 정착한다.</div>
+    </div>
+    <div class="pattern">
+      <div class="name">이동의 전조</div>
+      <div class="seq"><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-b">B</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span><span class="lab lab-a">A</span></div>
+      <div class="pi">π = [0.9, 0.1] → A</div>
+      <div class="note">실제로 A에 남은 비율은 11%뿐이다. 경계가 다가오는 비정상(drift) 신호를 동질 Markov 가정이 놓친다.</div>
+    </div>
+  </div>
+</section>
+
+<section id="setup">
+  <header><div class="eyebrow">실험 설정</div><h2>세 체제, 모두 같은 T₀ 상태에서 출발</h2></header>
+  <div class="table-wrap"><table class="data left">
+    <thead><tr><th>체제</th><th>반복 1회</th><th>기준해</th><th>특징</th></tr></thead>
+    <tbody>
+      <tr><td>exact</td><td>Lloyd (같은 궤적을 내는 Hamerly로 실행)</td><td>라벨 변화 0까지 수렴</td><td>유한 수렴이 보장되며, 비수렴은 긴 꼬리다</td></tr>
+      <tr><td>minibatch</td><td>1 epoch, Sculley 1/count, 배치 4096</td><td>마지막 50 epoch 최빈 라벨·점유율</td><td>진동이 점점 줄어든다</td></tr>
+      <tr><td>minibatch_const</td><td>1 epoch, 고정 학습률 η = 2×10⁻⁴</td><td>동일</td><td>극소수 점이 영구히 진동한다 (진행 중)</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="points prose">
+    <li><b>비교 방법:</b> 유지(B1), U 재배정(B2), 다수결(B3), U만 Lloyd(B4), U만 Hartigan(B5), <b>Markov hard/soft(P1/P2)</b>와 변형(평활 α=0.5, 공유 사전분포, 창 5/20), soft 비교군(라벨 빈도, T₀ 대표점의 GMM 사후, FCM), 그리고 기준(끝까지 수렴, oracle 사후).</li>
+    <li><b>지표:</b> 점–대표점 거리 계산 횟수와 단일 스레드 시간, 최종 라벨 대비 불일치(전체 / U 내부), Brier, 틀릴 점을 가려내는 AUROC, 장기 점유율과의 일치.</li>
+  </ul>
+  <details><summary>사례 목록 (수렴까지 걸린 반복 수 포함)</summary><div class="table-wrap"><table class="data"><thead><tr><th>#</th><th>regime</th><th>n</th><th>d</th><th>k</th><th>sep</th><th>seed</th><th>T_conv</th><th>acc</th></tr></thead><tbody><tr><td>1</td><td>exact</td><td>10,000,000</td><td>16</td><td>100</td><td>1.5</td><td>0</td><td>444</td><td>0.946</td></tr><tr><td>2</td><td>exact</td><td>10,000,000</td><td>16</td><td>100</td><td>1.5</td><td>1</td><td>614</td><td>0.919</td></tr><tr><td>3</td><td>exact</td><td>10,000,000</td><td>16</td><td>100</td><td>2.0</td><td>0</td><td>619</td><td>0.923</td></tr><tr><td>4</td><td>exact</td><td>10,000,000</td><td>16</td><td>100</td><td>2.0</td><td>1</td><td>406</td><td>0.953</td></tr><tr><td>5</td><td>exact</td><td>10,000,000</td><td>16</td><td>50</td><td>1.5</td><td>0</td><td>389</td><td>0.872</td></tr><tr><td>6</td><td>exact</td><td>10,000,000</td><td>16</td><td>50</td><td>1.5</td><td>1</td><td>383</td><td>0.868</td></tr><tr><td>7</td><td>exact</td><td>10,000,000</td><td>16</td><td>50</td><td>2.0</td><td>0</td><td>768</td><td>0.909</td></tr><tr><td>8</td><td>exact</td><td>10,000,000</td><td>16</td><td>50</td><td>2.0</td><td>1</td><td>471</td><td>0.939</td></tr><tr><td>9</td><td>minibatch</td><td>10,000,000</td><td>16</td><td>100</td><td>1.5</td><td>0</td><td>200</td><td>0.913</td></tr><tr><td>10</td><td>minibatch</td><td>10,000,000</td><td>16</td><td>50</td><td>1.5</td><td>0</td><td>200</td><td>0.812</td></tr><tr><td>11</td><td>minibatch</td><td>10,000,000</td><td>16</td><td>50</td><td>2.0</td><td>0</td><td>200</td><td>0.908</td></tr></tbody></table></div></details>
+</section>
+
+<section id="phenomenon">
+  <header><div class="eyebrow">현상</div><h2>U는 극소수지만, 앞으로 바뀔 점은 U 밖에 있다</h2></header>
+  <figure class="chart"><div class="chart-frame"><img src="figures/fig1_unstable_set.png" alt="T0별 U의 크기, U가 미리 잡아낸 이후 변화 비율, 오류 중 U의 비중" loading="lazy"></div><figcaption><span class="fig-no">그림 1</span>왼쪽부터 U의 비율(로그), 이후 바뀌는 점 V 중 U에 들어 있던 비율, 남은 오류 중 U 안에 있는 비율.</figcaption></figure>
+  <div class="table-title">일반 Lloyd</div>
+  <div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>|U|/n</th><th>|U| 평균</th><th>T0 이후 바뀌는 점 |V|</th><th>|U∩V|/|V|</th><th>U 중 T0 라벨이 틀린 점</th><th>전체 오류율(유지)</th></tr></thead><tbody><tr><td>10</td><td>21.771%</td><td>2,177,132</td><td>331,948</td><td>48.0%</td><td>140,821</td><td>2.984%</td></tr><tr><td>20</td><td>1.059%</td><td>105,932</td><td>247,049</td><td>8.5%</td><td>20,045</td><td>2.226%</td></tr><tr><td>30</td><td>0.331%</td><td>33,070</td><td>221,351</td><td>3.3%</td><td>6,900</td><td>2.022%</td></tr><tr><td>40</td><td>0.417%</td><td>41,689</td><td>184,046</td><td>2.4%</td><td>4,015</td><td>1.692%</td></tr><tr><td>50</td><td>0.198%</td><td>19,757</td><td>167,097</td><td>1.7%</td><td>2,468</td><td>1.543%</td></tr><tr><td>60</td><td>0.308%</td><td>30,812</td><td>139,443</td><td>2.3%</td><td>2,819</td><td>1.288%</td></tr><tr><td>70</td><td>0.360%</td><td>36,011</td><td>105,215</td><td>1.7%</td><td>1,477</td><td>0.970%</td></tr><tr><td>80</td><td>0.114%</td><td>11,448</td><td>95,109</td><td>1.4%</td><td>1,070</td><td>0.876%</td></tr><tr><td>90</td><td>0.097%</td><td>9,655</td><td>86,632</td><td>1.4%</td><td>956</td><td>0.799%</td></tr></tbody></table></div>
+  <details><summary>mini-batch 표</summary><div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>|U|/n</th><th>|U| 평균</th><th>T0 이후 바뀌는 점 |V|</th><th>|U∩V|/|V|</th><th>U 중 T0 라벨이 틀린 점</th><th>전체 오류율(유지)</th></tr></thead><tbody><tr><td>10</td><td>24.179%</td><td>2,417,934</td><td>140,830</td><td>61.5%</td><td>79,862</td><td>1.313%</td></tr><tr><td>20</td><td>0.400%</td><td>39,967</td><td>106,023</td><td>4.9%</td><td>4,691</td><td>0.969%</td></tr><tr><td>30</td><td>0.226%</td><td>22,636</td><td>85,682</td><td>2.7%</td><td>2,025</td><td>0.767%</td></tr><tr><td>40</td><td>0.140%</td><td>13,971</td><td>73,018</td><td>1.8%</td><td>1,122</td><td>0.641%</td></tr><tr><td>50</td><td>0.097%</td><td>9,669</td><td>64,203</td><td>1.3%</td><td>726</td><td>0.553%</td></tr><tr><td>60</td><td>0.072%</td><td>7,154</td><td>57,646</td><td>1.0%</td><td>486</td><td>0.487%</td></tr><tr><td>70</td><td>0.057%</td><td>5,729</td><td>52,349</td><td>0.8%</td><td>348</td><td>0.434%</td></tr><tr><td>80</td><td>0.049%</td><td>4,917</td><td>47,784</td><td>0.7%</td><td>283</td><td>0.389%</td></tr><tr><td>90</td><td>0.044%</td><td>4,424</td><td>43,647</td><td>0.7%</td><td>217</td><td>0.347%</td></tr></tbody></table></div></details>
+  <ul class="points prose">
+    <li>T₀ ≥ 20부터 U는 N의 0.1~1%로 극소수다. "극소수 비수렴 벡터" 전제는 성립한다.</li>
+    <li>그러나 T₀ 이후 실제로 바뀌는 점 중 U에 미리 들어 있던 비율은 1.4~8.5%다. 남은 변화는 경계가 새로운 점을 넘어가는 과정이다.</li>
+    <li>N = 10⁷에서는 수렴까지 383~768회가 걸렸다. T₀ = 90에서도 전체의 0.8%가 최종 라벨과 다르다.</li>
+  </ul>
+</section>
+
+<section id="rq1">
+  <header><div class="eyebrow">RQ1 · 계산량</div><h2>절감은 크지만, 기준선에 따라 크기가 다르다</h2></header>
+  <figure class="chart"><div class="chart-frame"><img src="figures/fig2_compute_saving.png" alt="T0별 계산량 절감률" loading="lazy"></div><figcaption><span class="fig-no">그림 2</span>Markov 편입으로 T₀에서 멈췄을 때의 절감률. 일반 Lloyd는 Lloyd·Hamerly를 끝까지 돌리는 경우와 비교하고, mini-batch는 200 epoch와 비교했다.</figcaption></figure>
+  <div class="grid2">
+    <div><div class="table-title">일반 Lloyd</div><div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>거리 절감 vs Lloyd</th><th>시간 절감 vs BLAS Lloyd</th><th>거리 절감 vs Hamerly</th><th>시간 절감 vs Hamerly</th><th>Markov 추가 시간(초)</th></tr></thead><tbody><tr><td>10</td><td>97.7%</td><td>96.7%</td><td>38.3%</td><td>64.1%</td><td>22.24</td></tr><tr><td>20</td><td>95.7%</td><td>95.6%</td><td>31.0%</td><td>68.3%</td><td>1.16</td></tr><tr><td>30</td><td>93.6%</td><td>93.6%</td><td>28.6%</td><td>66.0%</td><td>0.52</td></tr><tr><td>40</td><td>91.5%</td><td>91.5%</td><td>24.7%</td><td>62.5%</td><td>0.58</td></tr><tr><td>50</td><td>89.5%</td><td>89.4%</td><td>22.9%</td><td>60.6%</td><td>0.37</td></tr><tr><td>60</td><td>87.4%</td><td>87.4%</td><td>20.4%</td><td>58.1%</td><td>0.48</td></tr><tr><td>70</td><td>85.3%</td><td>85.3%</td><td>17.9%</td><td>55.6%</td><td>0.57</td></tr><tr><td>80</td><td>83.3%</td><td>83.2%</td><td>16.7%</td><td>54.1%</td><td>0.31</td></tr><tr><td>90</td><td>81.2%</td><td>81.2%</td><td>15.7%</td><td>52.5%</td><td>0.28</td></tr></tbody></table></div></div>
+    <div><div class="table-title">mini-batch</div><div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>거리 절감 vs 200 epoch</th><th>시간 절감 vs 200 epoch</th><th>Markov 추가 시간(초)</th></tr></thead><tbody><tr><td>10</td><td>94.5%</td><td>93.2%</td><td>24.25</td></tr><tr><td>20</td><td>89.6%</td><td>89.7%</td><td>0.35</td></tr><tr><td>30</td><td>84.6%</td><td>84.8%</td><td>0.22</td></tr><tr><td>40</td><td>79.6%</td><td>79.8%</td><td>0.14</td></tr><tr><td>50</td><td>74.6%</td><td>75.1%</td><td>0.11</td></tr><tr><td>60</td><td>69.7%</td><td>70.1%</td><td>0.09</td></tr><tr><td>70</td><td>64.7%</td><td>65.4%</td><td>0.07</td></tr><tr><td>80</td><td>59.7%</td><td>60.5%</td><td>0.06</td></tr><tr><td>90</td><td>54.7%</td><td>55.6%</td><td>0.06</td></tr></tbody></table></div></div>
+  </div>
+  <ul class="points prose">
+    <li>Hamerly는 반복 1회가 BLAS Lloyd보다 약 10배 싸다. 그래서 Hamerly 대비 거리 절감은 16~38%에 그친다. 시간 절감은 52~68%로 더 큰데, Hamerly도 반복마다 N개 점 전체의 상·하한을 갱신하기 때문이다.</li>
+    <li>Markov 편입은 거리를 계산하지 않는다. 비용은 T₀ = 10(U가 N의 22%)에서 약 22초이고, T₀ ≥ 30에서는 Hamerly 반복 약 1회 수준이다. 따라서 절감은 비교군 B1(그냥 멈춤)과 공유하는 효과다.</li>
+  </ul>
+</section>
+
+<section id="rq2">
+  <header><div class="eyebrow">RQ2 · 오차</div><h2>Markov 편입은 "현재 라벨 유지"와 거의 같은 결정을 한다</h2></header>
+  <figure class="chart"><div class="chart-frame"><img src="figures/fig3_error_in_U.png" alt="T0별 U 내부 오류율" loading="lazy"></div><figcaption><span class="fig-no">그림 3</span>U 중 최종 라벨과 다른 비율(로그). 다수결과 평활 Markov가 위에 떨어져 있고, 나머지는 겹친다.</figcaption></figure>
+  <div class="table-title">U 내부 오류율 — 일반 Lloyd</div>
+  <div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>유지(B1)</th><th>다수결(B3)</th><th><strong>Markov(P1)</strong></th><th>Markov α=0.5</th><th>Markov+공유사전(P3)</th><th>U 재배정(B2)</th><th>U만 Lloyd(B4)</th><th>U만 Hartigan(B5)</th></tr></thead><tbody><tr><td>10</td><td>5.85%</td><td>11.25%</td><td>6.23%</td><td>8.36%</td><td>6.34%</td><td>5.56%</td><td>4.62%</td><td>4.62%</td></tr><tr><td>20</td><td>17.79%</td><td>47.54%</td><td>17.97%</td><td>27.34%</td><td>19.92%</td><td>17.69%</td><td>17.68%</td><td>17.68%</td></tr><tr><td>30</td><td>17.99%</td><td>49.31%</td><td>18.05%</td><td>30.48%</td><td>20.51%</td><td>17.87%</td><td>17.84%</td><td>17.83%</td></tr><tr><td>40</td><td>13.66%</td><td>47.11%</td><td>13.73%</td><td>25.42%</td><td>15.86%</td><td>13.61%</td><td>13.60%</td><td>13.60%</td></tr><tr><td>50</td><td>13.64%</td><td>49.15%</td><td>13.70%</td><td>27.58%</td><td>16.62%</td><td>13.56%</td><td>13.53%</td><td>13.52%</td></tr><tr><td>60</td><td>11.85%</td><td>52.68%</td><td>11.90%</td><td>30.95%</td><td>14.83%</td><td>11.51%</td><td>11.45%</td><td>11.44%</td></tr><tr><td>70</td><td>10.43%</td><td>43.95%</td><td>10.52%</td><td>23.71%</td><td>13.57%</td><td>10.40%</td><td>10.39%</td><td>10.37%</td></tr><tr><td>80</td><td>10.87%</td><td>48.42%</td><td>10.87%</td><td>25.43%</td><td>13.76%</td><td>10.84%</td><td>10.83%</td><td>10.83%</td></tr><tr><td>90</td><td>11.32%</td><td>48.50%</td><td>11.38%</td><td>25.97%</td><td>14.74%</td><td>11.28%</td><td>11.28%</td><td>11.28%</td></tr></tbody></table></div>
+  <details><summary>U 내부 오류율 — mini-batch</summary><div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>유지(B1)</th><th>다수결(B3)</th><th><strong>Markov(P1)</strong></th><th>Markov α=0.5</th><th>Markov+공유사전(P3)</th><th>U 재배정(B2)</th></tr></thead><tbody><tr><td>10</td><td>2.43%</td><td>3.32%</td><td>2.49%</td><td>2.89%</td><td>2.51%</td><td>2.38%</td></tr><tr><td>20</td><td>6.30%</td><td>43.07%</td><td>6.77%</td><td>20.16%</td><td>7.59%</td><td>6.22%</td></tr><tr><td>30</td><td>4.98%</td><td>45.96%</td><td>5.81%</td><td>21.10%</td><td>6.53%</td><td>4.91%</td></tr><tr><td>40</td><td>4.24%</td><td>46.26%</td><td>4.76%</td><td>20.35%</td><td>5.85%</td><td>4.40%</td></tr><tr><td>50</td><td>4.17%</td><td>47.74%</td><td>4.82%</td><td>20.39%</td><td>5.50%</td><td>3.79%</td></tr><tr><td>60</td><td>3.63%</td><td>47.98%</td><td>4.16%</td><td>21.96%</td><td>5.67%</td><td>3.91%</td></tr><tr><td>70</td><td>3.23%</td><td>49.20%</td><td>3.93%</td><td>20.57%</td><td>4.80%</td><td>3.27%</td></tr><tr><td>80</td><td>3.29%</td><td>49.65%</td><td>3.81%</td><td>21.90%</td><td>4.60%</td><td>3.03%</td></tr><tr><td>90</td><td>2.98%</td><td>49.48%</td><td>4.10%</td><td>21.04%</td><td>5.06%</td><td>2.21%</td></tr></tbody></table></div></details>
+  <details><summary>전체 라벨 불일치율 — 일반 Lloyd</summary><div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>유지(B1)</th><th>다수결(B3)</th><th><strong>Markov(P1)</strong></th><th>Markov α=0.5</th><th>Markov+공유사전(P3)</th><th>U 재배정(B2)</th><th>U만 Lloyd(B4)</th><th>U만 Hartigan(B5)</th></tr></thead><tbody><tr><td>10</td><td>2.984%</td><td>4.343%</td><td>3.069%</td><td>3.575%</td><td>3.090%</td><td>2.900%</td><td>2.597%</td><td>2.597%</td></tr><tr><td>20</td><td>2.226%</td><td>2.568%</td><td>2.230%</td><td>2.297%</td><td>2.240%</td><td>2.225%</td><td>2.224%</td><td>2.224%</td></tr><tr><td>30</td><td>2.022%</td><td>2.119%</td><td>2.022%</td><td>2.061%</td><td>2.027%</td><td>2.021%</td><td>2.021%</td><td>2.021%</td></tr><tr><td>40</td><td>1.692%</td><td>1.828%</td><td>1.692%</td><td>1.723%</td><td>1.697%</td><td>1.691%</td><td>1.691%</td><td>1.691%</td></tr><tr><td>50</td><td>1.543%</td><td>1.617%</td><td>1.543%</td><td>1.572%</td><td>1.548%</td><td>1.542%</td><td>1.542%</td><td>1.542%</td></tr><tr><td>60</td><td>1.288%</td><td>1.466%</td><td>1.288%</td><td>1.402%</td><td>1.293%</td><td>1.283%</td><td>1.283%</td><td>1.283%</td></tr><tr><td>70</td><td>0.970%</td><td>1.024%</td><td>0.971%</td><td>0.992%</td><td>0.975%</td><td>0.969%</td><td>0.969%</td><td>0.969%</td></tr><tr><td>80</td><td>0.876%</td><td>0.920%</td><td>0.876%</td><td>0.893%</td><td>0.879%</td><td>0.876%</td><td>0.876%</td><td>0.876%</td></tr><tr><td>90</td><td>0.799%</td><td>0.836%</td><td>0.799%</td><td>0.813%</td><td>0.802%</td><td>0.799%</td><td>0.799%</td><td>0.799%</td></tr></tbody></table></div></details>
+  <ul class="points prose">
+    <li>대부분의 비수렴 점은 "한 번 옮겨 가서 머문" 흡수형 이력이라 π가 현재 라벨에 1을 준다. 그래서 Markov는 유지(B1)와 0~0.4%p(일반 Lloyd), 0.5~1.1%p(mini-batch) 차이밖에 나지 않는다.</li>
+    <li>다수결은 이미 옮긴 점을 되돌려 U의 43~53%를 틀린다. Markov의 흡수 상태 처리가 이 함정을 피한다는 점은 확인됐다.</li>
+    <li>U만 Lloyd나 Hartigan으로 다시 돌리면 T₀ = 10에서만 의미 있게 낫다(5.9% → 4.6%). 전체 오차는 U 밖이 지배하므로 U를 어떻게 처리해도 소수점 셋째 자리만 바뀐다.</li>
+  </ul>
+</section>
+
+<section id="rq3">
+  <header><div class="eyebrow">RQ3 · 연속 해석</div><h2>π = [0.5, 0.5]는 "나눠 소속"이 아니라 "아직 모름"이다</h2></header>
+  <figure class="chart"><div class="chart-frame"><img src="figures/fig4_soft_quality.png" alt="soft 소속도의 Brier와 AUROC" loading="lazy"></div><figcaption><span class="fig-no">그림 4</span>위: 최종 라벨 대비 Brier(낮을수록 좋음). 아래: 불확실도로 틀릴 점을 가려내는 AUROC(0.5 = 무작위).</figcaption></figure>
+  <figure class="chart"><div class="chart-frame"><img src="figures/fig5_fractional_reliability.png" alt="분수형 π의 신뢰도 도표" loading="lazy"></div><figcaption><span class="fig-no">그림 5</span>T₀ ≥ 20에서 π가 분수인 점만 모았다. 가로축은 예측 확률, 세로축은 실제로 그 군집에 정착한 비율이다. 점 크기는 표본 수를 나타낸다.</figcaption></figure>
+  <div class="grid2">
+    <div><div class="table-title">분수형 π를 받은 점의 운명</div><div class="table-wrap"><table class="data"><thead><tr><th>체제 / 시점</th><th>T0 라벨에 정착한 비율</th><th>장기 점유율이 0.05–0.95인 비율</th><th>분수형 π 점 수</th></tr></thead><tbody><tr><td>exact / T0=10</td><td>89.1%</td><td>0.0%</td><td>232,523</td></tr><tr><td>exact / T0&gt;=20</td><td>91.2%</td><td>0.0%</td><td>14,131</td></tr><tr><td>minibatch / T0=10</td><td>96.5%</td><td>0.3%</td><td>18,936</td></tr><tr><td>minibatch / T0&gt;=20</td><td>80.8%</td><td>2.1%</td><td>569</td></tr></tbody></table></div></div>
+    <div><div class="table-title">예측기별 Brier (분수형 π 점)</div><div class="table-wrap"><table class="data"><thead><tr><th>체제 / 시점</th><th>markov_pi</th><th>frequency</th><th>수렴모형 사후(oracle)</th></tr></thead><tbody><tr><td>exact / T0=10</td><td>0.165</td><td>0.161</td><td>0.058</td></tr><tr><td>exact / T0&gt;=20</td><td>0.145</td><td>0.130</td><td>0.120</td></tr><tr><td>minibatch / T0=10</td><td>0.130</td><td>0.112</td><td>0.150</td></tr><tr><td>minibatch / T0&gt;=20</td><td>0.272</td><td>0.308</td><td>0.245</td></tr></tbody></table></div></div>
+  </div>
+  <details><summary>π 구간별 실제 정착 비율 (T₀ ≥ 20)</summary><div class="table-wrap"><table class="data"><thead><tr><th>체제 / 예측기</th><th>[0.5,0.6)</th><th>[0.6,0.7)</th><th>[0.7,0.8)</th><th>[0.8,0.9)</th><th>[0.9,1.0)</th></tr></thead><tbody><tr><td>exact / frequency</td><td>0.53 (n=1,446)</td><td>0.64 (n=1,755)</td><td>0.78 (n=2,348)</td><td>0.90 (n=3,890)</td><td>0.95 (n=4,559)</td></tr><tr><td>exact / markov_pi</td><td>0.80 (n=911)</td><td>0.61 (n=1,864)</td><td>0.82 (n=6,496)</td><td>0.94 (n=4,671)</td><td>0.11 (n=167)</td></tr><tr><td>minibatch / frequency</td><td>0.80 (n=55)</td><td>0.58 (n=90)</td><td>0.51 (n=123)</td><td>0.48 (n=133)</td><td>0.58 (n=128)</td></tr><tr><td>minibatch / markov_pi</td><td>0.52 (n=83)</td><td>0.46 (n=102)</td><td>0.77 (n=90)</td><td>0.60 (n=292)</td><td>0.47 (n=2)</td></tr></tbody></table></div></details>
+  <details><summary>AUROC 표 — 일반 Lloyd / mini-batch</summary><div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>유지(B1)</th><th><strong>Markov soft(P2)</strong></th><th>Markov soft α=0.5</th><th>Markov soft+공유사전</th><th>빈도 soft</th><th>GMM 사후(T0)</th><th>수렴모형 사후(oracle)</th></tr></thead><tbody><tr><td>10</td><td>0.500</td><td>0.564</td><td>0.753</td><td>0.631</td><td>0.761</td><td>0.903</td><td>0.978</td></tr><tr><td>20</td><td>0.500</td><td>0.522</td><td>0.590</td><td>0.626</td><td>0.560</td><td>0.677</td><td>0.912</td></tr><tr><td>30</td><td>0.500</td><td>0.507</td><td>0.568</td><td>0.579</td><td>0.512</td><td>0.679</td><td>0.917</td></tr><tr><td>40</td><td>0.500</td><td>0.523</td><td>0.581</td><td>0.638</td><td>0.523</td><td>0.709</td><td>0.927</td></tr><tr><td>50</td><td>0.500</td><td>0.509</td><td>0.575</td><td>0.624</td><td>0.510</td><td>0.690</td><td>0.924</td></tr><tr><td>60</td><td>0.500</td><td>0.509</td><td>0.561</td><td>0.627</td><td>0.484</td><td>0.717</td><td>0.930</td></tr><tr><td>70</td><td>0.500</td><td>0.532</td><td>0.625</td><td>0.680</td><td>0.543</td><td>0.722</td><td>0.923</td></tr><tr><td>80</td><td>0.500</td><td>0.511</td><td>0.591</td><td>0.637</td><td>0.511</td><td>0.690</td><td>0.901</td></tr><tr><td>90</td><td>0.500</td><td>0.516</td><td>0.589</td><td>0.642</td><td>0.509</td><td>0.701</td><td>0.899</td></tr></tbody></table></div><div style="height:.75rem"></div><div class="table-wrap"><table class="data"><thead><tr><th>T0</th><th>유지(B1)</th><th><strong>Markov soft(P2)</strong></th><th>Markov soft α=0.5</th><th>Markov soft+공유사전</th><th>빈도 soft</th><th>GMM 사후(T0)</th><th>수렴모형 사후(oracle)</th></tr></thead><tbody><tr><td>10</td><td>0.500</td><td>0.562</td><td>0.706</td><td>0.737</td><td>0.747</td><td>0.951</td><td>0.969</td></tr><tr><td>20</td><td>0.500</td><td>0.638</td><td>0.661</td><td>0.718</td><td>0.557</td><td>0.736</td><td>0.799</td></tr><tr><td>30</td><td>0.500</td><td>0.671</td><td>0.646</td><td>0.721</td><td>0.528</td><td>0.686</td><td>0.794</td></tr><tr><td>40</td><td>0.500</td><td>0.696</td><td>0.637</td><td>0.754</td><td>0.523</td><td>0.657</td><td>0.784</td></tr><tr><td>50</td><td>0.500</td><td>0.710</td><td>0.631</td><td>0.703</td><td>0.533</td><td>0.654</td><td>0.764</td></tr><tr><td>60</td><td>0.500</td><td>0.692</td><td>0.624</td><td>0.714</td><td>0.495</td><td>0.630</td><td>0.737</td></tr><tr><td>70</td><td>0.500</td><td>0.722</td><td>0.623</td><td>0.729</td><td>0.529</td><td>0.646</td><td>0.733</td></tr><tr><td>80</td><td>0.500</td><td>0.728</td><td>0.625</td><td>0.691</td><td>0.506</td><td>0.631</td><td>0.736</td></tr><tr><td>90</td><td>0.500</td><td>0.757</td><td>0.619</td><td>0.749</td><td>0.511</td><td>0.639</td><td>0.713</td></tr></tbody></table></div></details>
+  <ul class="points prose">
+    <li><b>적용 대상이 매우 작다:</b> π가 분수인 점은 T₀ ≥ 20에서 U의 0.5~1.5%(일반 Lloyd), 2~4%(mini-batch)다.</li>
+    <li><b>타당성:</b> 분수형 π를 받은 점 중 장기적으로 두 군집을 실제로 나눠 쓰는 점은 0~2%다. 나머지는 결국 한 군집에 정착한다.</li>
+    <li><b>보정:</b> π가 0.6~0.9인 구간은 대체로 맞는다. 0.5 부근은 과소확신(관측 0.80)이고, 0.9 구간은 이동의 전조라 크게 틀린다(관측 0.11).</li>
+    <li><b>유용성:</b> mini-batch 후반(T₀ ≥ 40)에는 틀릴 점을 가려내는 AUROC가 GMM 사후보다 높다(T₀ = 90에서 0.76 대 0.64). 일반 Lloyd에서는 무작위 수준(0.51~0.53)이다.</li>
+  </ul>
+  <p class="callout">연속 해석이 성립할 가능성이 가장 높은 조건은 대표점이 계속 흔들려 진동이 영구히 이어지는 고정 학습률 체제다. 이 실험은 진행 중이며, 결과가 나오면 이 절을 갱신한다.</p>
+</section>
+
+<section id="next">
+  <header><div class="eyebrow">결론</div><h2>지금까지의 결론과 다음 실험</h2></header>
+  <ul class="points prose">
+    <li><b>계산량:</b> 극소수 비수렴 점 때문에 반복을 계속하는 낭비를 줄이는 효과는 실재하고 크다. 그 효과는 멈춤에서 나오며, Pérez-Ortega 계열의 조기 종료와 공유하는 이득이다.</li>
+    <li><b>오차:</b> Markov 편입은 다수결의 함정을 피하지만 현재 라벨 유지보다 낫지 않다. 전체 오차는 U 밖에서 앞으로 움직일 점이 지배한다.</li>
+    <li><b>연속 해석:</b> 일반 Lloyd와 감소 학습률 mini-batch에서는 소속 비율로 해석할 근거가 없다. 불확실성 신호로만 제한적으로 쓸 수 있다.</li>
+  </ul>
+  <div class="grid2">
+    <div class="pattern"><div class="name">Markov 불확실도 → 국소 정제</div><div class="note">π가 분수인 극소수 점에만 U-국소 Lloyd를 적용하는 하이브리드</div></div>
+    <div class="pattern"><div class="name">U 밖 위험 점 탐지</div><div class="note">Hamerly 상·하한의 여유나 마진으로, 아직 안 움직였지만 곧 움직일 점을 찾는다</div></div>
+    <div class="pattern"><div class="name">비동질 연쇄</div><div class="note">최근 전이에 가중치를 주거나 2차 Markov로 이동의 전조를 학습한다</div></div>
+    <div class="pattern"><div class="name">영구 진동 체제</div><div class="note">고정 학습률·스트리밍처럼 연속 해석이 의미를 가질 수 있는 조건 (실행 중)</div></div>
+  </div>
+</section>
+
+<footer>
+  <div>재현: 저장소 <code>busimm3318/Markov-K-means</code>, 브랜치 <code>claude/kmeans-efficiency-optimization-xtdu7v</code>. 전체 서술과 표는 <code>docs/results.md</code>에 있다.</div>
+<pre>./experiments/run_markov_tail.sh exact      # N=1e7 일반 Lloyd 8개 사례
+./experiments/run_markov_tail.sh minibatch  # N=1e7 mini-batch 4개 사례
+python -m experiments.analyze_markov_tail   # 그림·표 갱신</pre>
+  <div>한계: 합성 GMM 데이터만 사용했고, 주 실험은 d = 16이다. 설정당 시드 수가 적다(일반 Lloyd 2개, mini-batch 1개). 기준해는 국소최적해다.</div>
+</footer>
+</div>
+
+</body>
+</html>
