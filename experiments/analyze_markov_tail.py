@@ -294,11 +294,120 @@ def fig5(rep):
     plt.close(fig)
 
 
+# ----------------------------------------------------------------------------- report tables
+
+KEY_HARD = ["stop", "majority", "markov", "markov_a0.5", "markov_pooled", "reassign_U"]
+LABEL = {"stop": "유지(B1)", "reassign_U": "U 재배정(B2)", "majority": "다수결(B3)", "active_set_U": "U만 Lloyd(B4)",
+         "hartigan_U": "U만 Hartigan(B5)", "markov": "**Markov(P1)**", "markov_a0.5": "Markov α=0.5",
+         "markov_pooled": "Markov+공유사전(P3)", "markov_w5": "Markov W=5", "markov_w20": "Markov W=20",
+         "markov_soft": "**Markov soft(P2)**", "markov_a0.5_soft": "Markov soft α=0.5",
+         "markov_pooled_soft": "Markov soft+공유사전", "frequency_soft": "빈도 soft", "gmm_plugin_soft": "GMM 사후(T0)",
+         "fcm_soft": "FCM", "reassign_all": "전체 재배정", "full_convergence": "끝까지 수렴(기준)",
+         "true_posterior_oracle": "참 사후(oracle)", "model_posterior_oracle": "수렴모형 사후(oracle)"}
+
+
+def md(frame, fmt="{:.3g}", index_name="T0"):
+    cols = list(frame.columns)
+    esc = lambda x: str(x).replace("|", "\\|")
+    head = "| " + esc(index_name) + " | " + " | ".join(esc(LABEL.get(c, c)) for c in cols) + " |"
+    sep = "|" + "---|" * (len(cols) + 1)
+    body = []
+    for idx, row in frame.iterrows():
+        cells = []
+        for c in cols:
+            v = row[c]
+            f = fmt[c] if isinstance(fmt, dict) else fmt
+            cells.append("–" if pd.isna(v) else esc(f.format(v) if not isinstance(v, str) else v))
+        body.append(f"| {esc(idx)} | " + " | ".join(cells) + " |")
+    return "\n".join([head, sep] + body)
+
+
+def report_tables(df, rep):
+    T = {}
+    for reg in REGIMES:
+        d = df[df.regime == reg]
+        if d.empty:
+            continue
+        st = d[d.method == "stop"].groupby("T0").agg(
+            frac_U=("frac_U", "mean"), n_U=("n_U", "mean"), n_V=("n_V", "mean"),
+            caught=("n_U_and_V", "sum"), V_tot=("n_V", "sum"), U_wrong=("U_disagree_at_T0", "mean"),
+            err=("disagree_rate", "mean"))
+        st["caught"] = st["caught"] / st["V_tot"]
+        st = st.drop(columns="V_tot").rename(columns={
+            "frac_U": "|U|/n", "n_U": "|U| 평균", "n_V": "T0 이후 바뀌는 점 |V|", "caught": "|U∩V|/|V|",
+            "U_wrong": "U 중 T0 라벨이 틀린 점", "err": "전체 오류율(유지)"})
+        T[f"{reg}_state"] = md(st, {"|U|/n": "{:.3%}", "|U| 평균": "{:,.0f}", "T0 이후 바뀌는 점 |V|": "{:,.0f}",
+                                    "|U∩V|/|V|": "{:.1%}", "U 중 T0 라벨이 틀린 점": "{:,.0f}", "전체 오류율(유지)": "{:.3%}"})
+        mk_ = d[d.method == "markov"].groupby("T0")
+        if reg == "exact":
+            c = mk_[["save_dist_vs_lloyd_full", "save_sec_vs_lloyd_full", "save_dist_vs_base_full",
+                     "save_sec_vs_base_full", "extra_seconds"]].mean()
+            c.columns = ["거리 절감 vs Lloyd", "시간 절감 vs BLAS Lloyd", "거리 절감 vs Hamerly", "시간 절감 vs Hamerly",
+                         "Markov 추가 시간(초)"]
+            T[f"{reg}_compute"] = md(c, {k_: "{:.1%}" for k_ in c.columns[:4]} | {"Markov 추가 시간(초)": "{:.2f}"})
+        else:
+            c = mk_[["save_dist_vs_base_full", "save_sec_vs_base_full", "extra_seconds"]].mean()
+            c.columns = ["거리 절감 vs 200 epoch", "시간 절감 vs 200 epoch", "Markov 추가 시간(초)"]
+            T[f"{reg}_compute"] = md(c, {k_: "{:.1%}" for k_ in c.columns[:2]} | {"Markov 추가 시간(초)": "{:.2f}"})
+        hard = KEY_HARD + (["active_set_U", "hartigan_U"] if reg == "exact" else ["reassign_all"])
+        e = d[d.method.isin(hard)].pivot_table(index="T0", columns="method", values="U_err_rate", aggfunc="mean")
+        T[f"{reg}_uerr"] = md(e[[h for h in hard if h in e]], "{:.2%}")
+        e2 = d[d.method.isin(hard)].pivot_table(index="T0", columns="method", values="disagree_rate", aggfunc="mean")
+        T[f"{reg}_err"] = md(e2[[h for h in hard if h in e2]], "{:.3%}")
+        soft = ["stop", "markov_soft", "markov_a0.5_soft", "markov_pooled_soft", "frequency_soft", "gmm_plugin_soft",
+                "model_posterior_oracle"]
+        for col, key, f in (("brier_ref", "brier", "{:.3f}"), ("auroc_err_ref", "auroc", "{:.3f}"),
+                            ("frac_fractional", "fractional", "{:.1%}"), ("tv_ref_soft", "tvref", "{:.3f}")):
+            if col not in d or d[col].isna().all():
+                continue
+            q = d[d.method.isin(soft)].pivot_table(index="T0", columns="method", values=col, aggfunc="mean")
+            T[f"{reg}_{key}"] = md(q[[x for x in soft if x in q]], f)
+    if len(rep):
+        r = rep[rep.bin == "all"].copy()
+        r["key"] = r.regime + " / " + r.subset
+        piv = r.pivot_table(index="key", columns="predictor", values="brier", aggfunc="first")
+        T["osc_brier"] = md(piv[[c for c in ["markov_pi", "frequency", "plugin_posterior_T0", "model_posterior_oracle"]
+                                 if c in piv]], "{:.3f}", index_name="체제 / 시점")
+        piv = r.pivot_table(index="key", values=["n", "frac_outcome_mixed", "ends_in_label_T0"], aggfunc="first")
+        piv = piv.rename(columns={"n": "분수형 π 점 수", "frac_outcome_mixed": "장기 점유율이 0.05–0.95인 비율",
+                                  "ends_in_label_T0": "T0 라벨에 정착한 비율"})
+        T["osc_fate"] = md(piv, {"분수형 π 점 수": "{:,.0f}", "장기 점유율이 0.05–0.95인 비율": "{:.1%}",
+                                 "T0 라벨에 정착한 비율": "{:.1%}"}, index_name="체제 / 시점")
+        rb = rep[(rep.bin != "all") & (rep.subset == "T0>=20") & (rep.predictor.isin(["markov_pi", "frequency"]))].copy()
+        rb["cell"] = rb.apply(lambda x: f"{x.observed:.2f} (n={x.n:,})", axis=1)
+        rb["key"] = rb.regime + " / " + rb.predictor
+        T["osc_bins"] = md(rb.pivot_table(index="key", columns="bin", values="cell", aggfunc="first"), "{}",
+                           index_name="체제 / 예측기")
+    inst = df.groupby("instance").agg(regime=("regime", "first"), n=("n", "first"), d=("d", "first"), k=("k", "first"),
+                                      sep=("sep", "first"), seed=("seed", "first"), T_conv=("T_conv", "first"),
+                                      acc=("ref_acc_truth", "first"))
+    inst = inst.reset_index(drop=True)
+    inst.index = range(1, len(inst) + 1)
+    T["instances"] = md(inst, {"n": "{:,}", "d": "{}", "k": "{}", "sep": "{}", "seed": "{}", "T_conv": "{}",
+                               "acc": "{:.3f}", "regime": "{}"}, index_name="#")
+    return T
+
+
+def fill_report(T, path=ROOT / "docs" / "results.md"):
+    """Replace every <!-- TABLE:key --> ... <!-- /TABLE --> block of the report with fresh tables."""
+    if not path.exists():
+        return
+    import re
+    text = path.read_text()
+
+    def sub(m):
+        key = m.group(1)
+        return f"<!-- TABLE:{key} -->\n{T.get(key, '_(아직 결과 없음)_')}\n<!-- /TABLE -->"
+
+    path.write_text(re.sub(r"<!-- TABLE:(\w+) -->.*?<!-- /TABLE -->", sub, text, flags=re.S))
+
+
 def main():
     df = load()
     figures(df)
     t = tables(df)
     osc = oscillator_report()
+    fill_report(report_tables(df, osc))
     if len(osc):
         print(osc.to_string())
     print(t[4].to_string())
