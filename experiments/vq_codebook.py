@@ -147,7 +147,11 @@ class EMAVQEngine:
         return int((self.labels != prev).sum())
 
 
-def record(X, C0, seed, epochs):
+def record(X, C0, seed, epochs, cache=None):
+    if cache is not None and cache.exists():
+        z = np.load(cache)
+        print(f"    trajectory loaded from {cache.name}", flush=True)
+        return {k: z[k] for k in ("H", "C", "counts", "secs")}
     eng = EMAVQEngine(X, C0, seed=seed)
     n = X.shape[0]
     H = np.empty((epochs + 1, n), dtype=np.uint16)
@@ -161,7 +165,10 @@ def record(X, C0, seed, epochs):
         H[t], C[t] = eng.labels, eng.centers
         if t % 10 == 0:
             print(f"    epoch {t}: changed {counts[-1]} ({counts[-1] / n:.4f}) {secs[-1]:.0f}s", flush=True)
-    return dict(H=H, C=C, counts=np.array(counts), secs=np.array(secs))
+    traj = dict(H=H, C=C, counts=np.array(counts), secs=np.array(secs))
+    if cache is not None:
+        np.savez(cache, **traj)
+    return traj
 
 
 # ----------------------------------------------------------------------------- evaluation
@@ -251,7 +258,9 @@ def evaluate_cut(setting, X, traj, T, ref_label, ref_occ, rng, policy, extra=Non
     for tau in scale * np.array([0.03, 0.1, 0.3, 1.0, 3.0, 10.0]):
         Wt = np.exp(-(D - D[:, :1]) / tau)
         Wt /= Wt.sum(1, keepdims=True)
-        R = np.einsum("ij,ijd->id", Wt, C[I])
+        R = np.zeros_like(XU)
+        for j in range(I.shape[1]):
+            R += Wt[:, j, None] * C[I[:, j]]
         e = mse_rows(XU, R)
         if best is None or e[half].mean() < best[0]:
             best = (e[half].mean(), tau, e, Wt)
@@ -275,24 +284,33 @@ def evaluate_cut(setting, X, traj, T, ref_label, ref_occ, rng, policy, extra=Non
     row["auroc_distsoft"] = auroc(1 - Wt.max(1), wrong)
     row["auroc_margin"] = auroc(-(D[:, 1] - D[:, 0]), wrong)
     # agreement of the soft tokens with the long-run occupancy of the reference window
-    occ = ref_occ[U]
+    tail_U = ref_occ[:, U]
     for nm, (S, P) in (("pi", (S_m, P_m)), ("occupancy", (S_f, P_f))):
         tv = np.ones(len(U))
         for j in range(S.shape[1]):
             ok = S[:, j] >= 0
-            tv[ok] -= np.minimum(P[ok, j], occ[ok, S[ok, j]])
+            occ_j = (tail_U == S[:, j]).mean(0)
+            tv[ok] -= np.minimum(P[ok, j], occ_j[ok])
         row[f"tv_{nm}"] = float(tv.mean())
     row.update(extra or {})
     return row
 
 
-def reference(H, K):
+def reference(H, K, chunk=1 << 18):
+    """Modal label of every vector over the last REF_WINDOW epochs (ties: smallest label)
+    and the window itself (occupancies are computed for the few vectors that need them)."""
     tail = H[-REF_WINDOW:]
     n = H.shape[1]
-    occ = np.zeros((n, K), dtype=np.float32)
-    for r in tail:
-        occ[np.arange(n), r] += 1.0 / REF_WINDOW
-    return occ.argmax(1), occ
+    mode = np.empty(n, dtype=np.int64)
+    rows = np.arange(REF_WINDOW, dtype=np.int16)[:, None]
+    for s in range(0, n, chunk):
+        srt = np.sort(tail[:, s:s + chunk], axis=0)
+        new = np.ones(srt.shape, dtype=bool)
+        new[1:] = srt[1:] != srt[:-1]
+        start = np.maximum.accumulate(np.where(new, rows, 0), axis=0)
+        run = rows - start + 1
+        mode[s:s + chunk] = np.take_along_axis(srt, run.argmax(0)[None], 0)[0]
+    return mode, tail
 
 
 def write(path, row):
@@ -321,8 +339,7 @@ def run_setting(setting, X, K, seed, out, epochs=EPOCHS):
     sample = X[rng.choice(n, size=min(n, 100_000), replace=False)]
     C0, _ = kmeans_plusplus(sample.astype(np.float64), K, random_state=seed)
     print(f"[{time.strftime('%H:%M:%S')}] {setting}: n={n} d={d} K={K}", flush=True)
-    traj = record(X, C0.astype(np.float32), seed, epochs)
-    np.savez(DATA / f"vq_traj_{setting}_K{K}.npz", counts=traj["counts"], secs=traj["secs"])
+    traj = record(X, C0.astype(np.float32), seed, epochs, cache=DATA / f"vq_traj_{setting}_K{K}_e{epochs}.npz")
     ref_label, ref_occ = reference(traj["H"], K)
     full_secs = traj["secs"][-1]
     rows = []
