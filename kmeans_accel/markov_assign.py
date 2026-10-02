@@ -127,28 +127,47 @@ def pooled_prior(Hw, k, strength=2.0):
     return np.divide(G, tot, out=np.zeros_like(G), where=tot > 0) * strength
 
 
-def frequency(Hw):
-    """Empirical occupancy of each visited label over the window (the non-Markov baseline)."""
-    Hw = np.asarray(Hw, dtype=np.int64)
+@njit(cache=True)
+def _frequency(Hw):
     w, m = Hw.shape
     S = np.full((m, w), -1, dtype=np.int64)
     F = np.zeros((m, w))
     for i in range(m):
-        vals, cnt = np.unique(Hw[:, i], return_counts=True)
-        S[i, :len(vals)] = vals
-        F[i, :len(vals)] = cnt / w
+        s = 0
+        for t in range(w):
+            v = Hw[t, i]
+            found = -1
+            for q in range(s):
+                if S[i, q] == v:
+                    found = q
+                    break
+            if found < 0:
+                S[i, s] = v
+                F[i, s] = 1.0
+                s += 1
+            else:
+                F[i, found] += 1.0
+        for q in range(s):
+            F[i, q] /= w
     return S, F
+
+
+def frequency(Hw):
+    """Empirical occupancy of each visited label over the window (the non-Markov baseline).
+
+    Same (states, probs) layout as :func:`stationary`, states in order of first visit.
+    """
+    return _frequency(np.ascontiguousarray(Hw, dtype=np.int64))
 
 
 def argmax_label(states, probs, current, tol=1e-12):
     """Hard label from (states, probs); ties go to the current label, then the lowest index."""
-    m = states.shape[0]
-    out = np.empty(m, dtype=np.int64)
-    best = probs.max(1)
-    for i in range(m):
-        cand = states[i][(probs[i] >= best[i] - tol) & (states[i] >= 0)]
-        out[i] = current[i] if current[i] in cand else cand.min()
-    return out
+    valid = states >= 0
+    p = np.where(valid, probs, -np.inf)
+    cand = valid & (p >= p.max(1, keepdims=True) - tol)
+    cur_ok = (cand & (states == current[:, None])).any(1)
+    lowest = np.where(cand, states, np.iinfo(np.int64).max).min(1)
+    return np.where(cur_ok, current, lowest)
 
 
 def to_dense(states, probs, k):

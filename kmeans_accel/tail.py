@@ -24,7 +24,7 @@ class TailResult:
     n_dist: int = 0
     center_passes: int = 0
     seconds: float = 0.0
-    soft: np.ndarray | None = None          # (|U|, k) memberships over fitted clusters
+    soft: tuple | None = None               # sparse (states, probs), each (|U|, W+1)
     extra: dict = field(default_factory=dict)
 
 
@@ -144,17 +144,43 @@ def _hartigan(X, idx, labels, S, cnt, max_sweeps):
     return n_dist, moves, sweep
 
 
-def soft_centers(X, labels, U, W):
-    """Weighted centroids: points outside U count fully for their label, U by weights W."""
-    k = W.shape[1]
-    S, cnt = _sums(X, labels, k)
-    XU = X[U]
-    np.subtract.at(S, labels[U], XU)
-    np.subtract.at(cnt, labels[U], 1.0)
-    S += W.T @ XU
-    cnt += W.sum(0)
-    C = S / np.maximum(cnt, 1e-300)[:, None]
-    return C, cnt
+@njit(cache=True)
+def _soft_sums(X, labels, U, S, P, k):
+    n, d = X.shape
+    sums = np.zeros((k, d))
+    cnt = np.zeros(k)
+    in_u = np.zeros(n, dtype=np.bool_)
+    for r in range(U.shape[0]):
+        in_u[U[r]] = True
+    for i in range(n):
+        if in_u[i]:
+            continue
+        c = labels[i]
+        cnt[c] += 1.0
+        for t in range(d):
+            sums[c, t] += X[i, t]
+    for r in range(U.shape[0]):
+        i = U[r]
+        for q in range(S.shape[1]):
+            j = S[r, q]
+            if j < 0:
+                break
+            w = P[r, q]
+            if w == 0.0:
+                continue
+            cnt[j] += w
+            for t in range(d):
+                sums[j, t] += w * X[i, t]
+    return sums, cnt
+
+
+def soft_centers(X, labels, U, S, P, C_fallback):
+    """Weighted centroids: points outside U count fully for their label, U by (S, P) weights."""
+    sums, cnt = _soft_sums(X, labels, U, S, P, C_fallback.shape[0])
+    C = C_fallback.copy()
+    ok = cnt > 0
+    C[ok] = sums[ok] / cnt[ok, None]
+    return C
 
 
 # ----------------------------------------------------------------------------- strategies
@@ -195,14 +221,11 @@ def majority(X, L, C_T, U, Hw, fixed=False, soft=False):
     S, F = mk.frequency(Hw)
     lab = L.copy()
     lab[U] = mk.argmax_label(S, F, L[U])
-    Wd = mk.to_dense(S, F, C_T.shape[0])
     if soft and not fixed:
-        C, _ = soft_centers(X, L, U, Wd)
-        C[np.isnan(C).any(1)] = C_T[np.isnan(C).any(1)]
-        passes = 1
+        C, passes = soft_centers(X, L, U, S, F, C_T), 1
     else:
         C, passes = _finish(X, lab, C_T, fixed)
-    return TailResult(lab, C, 0, passes, time.perf_counter() - t, soft=Wd if soft else None)
+    return TailResult(lab, C, 0, passes, time.perf_counter() - t, soft=(S, F) if soft else None)
 
 
 def active_set(X, L, C_T, U, Hw, max_iter=200):
@@ -235,15 +258,12 @@ def markov(X, L, C_T, U, Hw, alpha=0.0, window=None, pooled=0.0, soft=False, fix
     S, P = mk.stationary(H, alpha=alpha, prior=prior)
     lab = L.copy()
     lab[U] = mk.argmax_label(S, P, L[U])
-    Wd = mk.to_dense(S, P, k)
     t_markov = time.perf_counter() - t
     if soft and not fixed:
-        C, _ = soft_centers(X, L, U, Wd)
-        C[np.isnan(C).any(1)] = C_T[np.isnan(C).any(1)]
-        passes = 1
+        C, passes = soft_centers(X, L, U, S, P, C_T), 1
     else:
         C, passes = _finish(X, lab, C_T, fixed)
-    return TailResult(lab, C, 0, passes, time.perf_counter() - t, soft=Wd if soft else None,
+    return TailResult(lab, C, 0, passes, time.perf_counter() - t, soft=(S, P) if soft else None,
                       extra={"markov_seconds": t_markov, "mean_states": float((S >= 0).sum(1).mean())})
 
 
@@ -260,11 +280,37 @@ def reassign_all(X, L, C_T, U, Hw, chunk=1 << 16):
 
 # ----------------------------------------------------------------------------- soft comparators
 
-def soft_fcm(X, C, U, m=2.0):
-    """Fuzzy c-means membership of U w.r.t. fixed centers C (|U| k distances)."""
-    D = np.maximum(_sqdist_subset(X, U, C), 1e-300)
-    inv = D ** (-1.0 / (m - 1.0))
+def _fcm(D, m=2.0):
+    inv = np.maximum(D, 1e-300) ** (-1.0 / (m - 1.0))
     return inv / inv.sum(1, keepdims=True)
+
+
+def _gmm(D, var, w):
+    logp = np.log(np.maximum(w, 1e-300)) - D / (2.0 * var)
+    logp -= logp.max(1, keepdims=True)
+    P = np.exp(logp)
+    return P / P.sum(1, keepdims=True)
+
+
+def soft_comparator(kind, X, C, U, eval_rows, params=None, chunk=100_000):
+    """Distance-based memberships of U (fuzzy c-means m=2, or plug-in GMM posterior).
+
+    Processed in chunks so |U| k never materialises; returns the argmax label of every
+    point of U and the dense memberships of the rows ``eval_rows`` only.
+    """
+    k = C.shape[0]
+    labels = np.empty(len(U), dtype=np.int64)
+    W_eval = np.empty((len(eval_rows), k))
+    pos = np.full(len(U), -1, dtype=np.int64)
+    pos[eval_rows] = np.arange(len(eval_rows))
+    for s0 in range(0, len(U), chunk):
+        sl = slice(s0, min(len(U), s0 + chunk))
+        D = _sqdist_subset(X, U[sl], C)
+        Wm = _fcm(D) if kind == "fcm" else _gmm(D, *params)
+        labels[sl] = Wm.argmax(1)
+        p = pos[sl]
+        W_eval[p[p >= 0]] = Wm[p >= 0]
+    return labels, W_eval
 
 
 def gmm_params(X, labels, C):
@@ -278,11 +324,7 @@ def gmm_params(X, labels, C):
 def soft_gmm(X, labels, C, U, params=None):
     """Plug-in GMM posterior of U: shared isotropic variance, weights from the partition."""
     var, w = gmm_params(X, labels, C) if params is None else params
-    D = _sqdist_subset(X, U, C)
-    logp = np.log(np.maximum(w, 1e-300)) - D / (2.0 * var)
-    logp -= logp.max(1, keepdims=True)
-    P = np.exp(logp)
-    return P / P.sum(1, keepdims=True)
+    return _gmm(_sqdist_subset(X, U, C), var, w)
 
 
 def true_posterior(X, U, means, var=1.0):

@@ -29,6 +29,7 @@ from sklearn.cluster import kmeans_plusplus
 from sklearn.metrics import roc_auc_score
 
 from kmeans_accel import datasets, tail
+from kmeans_accel import markov_assign as mk
 from kmeans_accel.core import compute_centers, inertia
 from kmeans_accel.hamerly import hamerly
 from kmeans_accel.lloyd import lloyd, lloyd_gemm
@@ -40,6 +41,7 @@ W = 10            # window that defines U and feeds the chains
 W_MAX = 20        # longest window any variant reads
 MIN_CONV = 100    # instances must need at least this many iterations
 REF_WINDOW = 50   # mini-batch: soft reference = occupancy over the last REF_WINDOW epochs
+EVAL_MAX = 200_000  # soft metrics are scored on a seeded random sample of U when |U| is larger
 
 
 def strategies(regime):
@@ -261,6 +263,7 @@ def main(argv=None):
     p.add_argument("--epochs", type=int, default=200)
     p.add_argument("--out", default="")
     p.add_argument("--min-conv", type=int, default=MIN_CONV)
+    p.add_argument("--eval-max", type=int, default=EVAL_MAX)
     a = p.parse_args(argv)
     RESULTS.mkdir(parents=True, exist_ok=True)
     out = RESULTS / (a.out or f"markov_tail_{a.regime}.csv")
@@ -321,15 +324,21 @@ def main(argv=None):
         U = np.flatnonzero((win != rec.H[T0]).any(0)).astype(np.int64)
         V = rec.last_change > T0
         Hw = rec.H[max(0, T0 - W_MAX):T0 + 1][:, U].astype(np.int64)
-        post_true = tail.true_posterior(X, U, means)
-        ref_U = ref_labels[U]
-        ctx = {"ref_U": ref_U, "z_U": z[U], "fit2true": fit2true, "post_true": post_true,
-               "model_post": tail.soft_gmm(X, ref_labels, ref_C, U, params=model_params),
-               "matched": matched_cluster[ref_U] & matched_cluster[L[U]],
-               "ref_soft": rec.occupancy(U, a.k) if a.regime == "minibatch" else None}
-        common = dict(meta, T0=T0, n_U=len(U), frac_U=len(U) / a.n, n_V=int(V.sum()),
+        if len(U) > a.eval_max:
+            rng = np.random.default_rng([a.seed, T0])
+            eval_rows = np.sort(rng.choice(len(U), a.eval_max, replace=False))
+        else:
+            eval_rows = np.arange(len(U))
+        Ue = U[eval_rows]
+        post_true = tail.true_posterior(X, Ue, means)
+        ref_U = ref_labels[Ue]
+        ctx = {"ref_U": ref_U, "z_U": z[Ue], "fit2true": fit2true, "post_true": post_true,
+               "model_post": tail.soft_gmm(X, ref_labels, ref_C, Ue, params=model_params),
+               "matched": matched_cluster[ref_U] & matched_cluster[L[Ue]],
+               "ref_soft": rec.occupancy(Ue, a.k) if a.regime == "minibatch" else None}
+        common = dict(meta, T0=T0, n_U=len(U), n_U_eval=len(Ue), frac_U=len(U) / a.n, n_V=int(V.sum()),
                       n_U_and_V=int(V[U].sum()), changes_at_T0=int(ch[T0]),
-                      U_disagree_at_T0=int((L[U] != ref_U).sum()),
+                      U_disagree_at_T0=int((L[U] != ref_labels[U]).sum()),
                       prefix_base_dist=nd_cum[T0], prefix_base_sec=sec_cum[T0],
                       full_base_dist=nd_cum[-1], full_base_sec=sec_cum[-1],
                       lloyd_dist_iter=float(a.n) * a.k, lloyd_gemm_sec_iter=gemm_s,
@@ -349,17 +358,19 @@ def main(argv=None):
         for name, (fn, is_soft) in strat.items():
             Hin = Hw if name == "markov_w20" else Hw[-(W + 1):]
             r = fn(X, L, C_T, U, Hin)
-            Wsoft = r.soft if is_soft else onehot[r.labels[U]]
+            Wsoft = (mk.to_dense(r.soft[0][eval_rows], r.soft[1][eval_rows], a.k) if is_soft
+                     else onehot[r.labels[Ue]])
             emit(name, r.labels, r.centers, Wsoft, r.n_dist, r.center_passes, r.seconds, r.extra)
 
         # soft comparators: memberships from distances to the current representatives
         C_star = C_T if a.regime == "minibatch" else compute_centers(X, L, C_T)[0]
-        for name, fn in (("fcm_soft", lambda: tail.soft_fcm(X, C_star, U)),
-                         ("gmm_plugin_soft", lambda: tail.soft_gmm(X, L, C_star, U))):
+        gparams = tail.gmm_params(X, L, C_star)
+        for name, kind in (("fcm_soft", "fcm"), ("gmm_plugin_soft", "gmm")):
             t = time.perf_counter()
-            Wsoft = fn()
+            labU, Wsoft = tail.soft_comparator(kind, X, C_star, U, eval_rows,
+                                               params=gparams if kind == "gmm" else None)
             lab = L.copy()
-            lab[U] = Wsoft.argmax(1)
+            lab[U] = labU
             emit(name, lab, C_star, Wsoft, len(U) * a.k, 0 if a.regime == "minibatch" else 1,
                  time.perf_counter() - t)
 

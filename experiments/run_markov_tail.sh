@@ -12,6 +12,8 @@ exact() {
         --n 10000000 --d 16 --k "$1" --sep "$2" --seed "$seed"
     done
   done
+}
+extreme() {  # ~10 GB peak: run alone
   OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python -m experiments.markov_tail --regime exact \
     --n 30000000 --d 16 --k 50 --sep 2.0 --seed 0
 }
@@ -30,6 +32,6 @@ highdim() {
   done
 }
 case "$queue" in
-  exact) exact ;; minibatch) minibatch ;; highdim) highdim ;;
-  all) exact; minibatch; highdim ;;
+  exact) exact ;; minibatch) minibatch ;; extreme) extreme ;; highdim) highdim ;;
+  all) exact; minibatch; extreme; highdim ;;
 esac
