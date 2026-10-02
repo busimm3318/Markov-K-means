@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from kmeans_accel import markov_assign as _mk
+from . import _markov as _mk
 
 
 @dataclass

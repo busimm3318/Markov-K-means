@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from kmeans_accel.core import center_drift, compute_centers, nearest_all
-from kmeans_accel.hamerly import _assign, _half_nearest_center, _init, _update_bounds
-from kmeans_accel.minibatch_epochs import _sculley_update
+from ._kernels import (_assign, _half_nearest_center, _init, _sculley_update, _update_bounds,
+                       center_drift, compute_centers, nearest_all)
 
 
 class LloydEngine:

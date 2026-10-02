@@ -10,3 +10,5 @@ experiments/logs/
 # in-progress experiment output; committed explicitly (git add -f) once runs finish
 experiments/results/markov_tail_*.csv
 experiments/results/oscillators_*.npz
+dist/
+build/

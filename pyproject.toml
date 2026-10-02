@@ -1,21 +1,47 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "markov-kmeans"
-version = "0.1.0"
-description = "Markov-K-means: stop K-means when only a few points still move and settle them with the Markov chain of their label history"
+dynamic = ["version"]
+description = "Markov-K-means: stop K-means once only a few points still change cluster and settle them with the long-run law of the Markov chain of their label history"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "busimm3318" }]
 requires-python = ">=3.10"
-dependencies = ["numpy", "scipy", "numba", "scikit-learn", "threadpoolctl"]
+dependencies = ["numpy>=1.24", "scipy>=1.10", "numba>=0.59", "scikit-learn>=1.3"]
+keywords = ["k-means", "clustering", "markov chain", "soft clustering", "early stopping", "mini-batch k-means"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+[project.urls]
+Homepage = "https://github.com/busimm3318/Markov-K-means"
+Repository = "https://github.com/busimm3318/Markov-K-means"
+Issues = "https://github.com/busimm3318/Markov-K-means/issues"
+Results = "https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md"
 
 [project.optional-dependencies]
-dev = ["pytest", "pandas", "matplotlib"]
+# research code (kmeans_accel/, experiments/, benchmarks/) lives in the repository only
+dev = ["pytest", "pandas", "matplotlib", "threadpoolctl", "build", "twine"]
+
+[tool.setuptools.dynamic]
+version = { attr = "markov_kmeans.__version__" }
 
 [tool.setuptools.packages.find]
-include = ["markov_kmeans*", "kmeans_accel*"]
+include = ["markov_kmeans*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]

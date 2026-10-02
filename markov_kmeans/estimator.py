@@ -5,11 +5,9 @@ import time
 
 import numpy as np
 
-from kmeans_accel import markov_assign as _mk
-from kmeans_accel.core import as_data, compute_centers, inertia
-from kmeans_accel.tail import soft_centers
-
+from . import _markov as _mk
 from ._engines import HamerlyEngine, LloydEngine, MiniBatchEngine
+from ._kernels import as_data, compute_centers, inertia, soft_centers
 
 _ALGORITHMS = ("hamerly", "lloyd", "minibatch")
 

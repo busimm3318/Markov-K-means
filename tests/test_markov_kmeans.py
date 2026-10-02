@@ -94,3 +94,15 @@ def test_input_validation(blobs):
         MarkovKMeans(3, algorithm="nope").fit(blobs)
     with pytest.raises(RuntimeError):
         MarkovKMeans(3).predict(blobs)
+
+
+def test_package_is_standalone(tmp_path):
+    """The published wheel ships only markov_kmeans: it must not import the research package."""
+    import subprocess
+    import sys
+
+    code = ("import sys, numpy as np, markov_kmeans; "
+            "m = markov_kmeans.MarkovKMeans(3, t0=2, random_state=0).fit(np.random.default_rng(0).normal(size=(300, 2))); "
+            "assert 'kmeans_accel' not in sys.modules, 'research package imported'; print('ok')")
+    r = subprocess.run([sys.executable, "-c", code], cwd=tmp_path, capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.strip() == "ok", r.stderr
