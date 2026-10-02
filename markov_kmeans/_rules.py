@@ -13,8 +13,15 @@ Representatives — how stable the centers are
     ``center_drift``       max over centers of (distance moved in the last iteration) divided by
                            half the distance to the nearest other center (the scale at which a
                            center move shifts a Voronoi boundary)
-    stable when it is below ``center_tol``, or has stopped decreasing (a noise floor) and is
-    below ``center_noise_tol``
+    ``center_travel``      the same max displacement measured over the whole window (C_t versus
+                           C_{t-W}) divided by the mean one-step drift over the window: about 1
+                           when the centers jitter around a fixed point, about sqrt(W) for a
+                           random walk and W for a steady drift
+    stable when the drift averaged over the window is below ``center_tol`` (the centers have
+    stopped), or when the drift has stopped decreasing (a noise floor), is below
+    ``center_noise_tol`` and the centers do not travel (``center_travel <= travel_ratio``,
+    they jitter around a fixed point); a noisy base algorithm whose centers still drift
+    under the jitter is not stable yet
 
 Partitions — how stable the clusters are
     ``cluster_unstable``   max over clusters of the share of its members still moving
@@ -66,6 +73,7 @@ class StopParams:
     center_noise_tol: float = 5e-2
     cluster_tol: float = 0.1
     size_tol: float = 0.02
+    travel_ratio: float = 2.0
 
 
 def switches(Hw):
@@ -130,6 +138,7 @@ class StateMonitor:
         self.trace = []
         self.t = -1
         self._C = None
+        self._Cring = None    # centers of the last W+1 iterations
 
     def push(self, labels, centers, changed=None):
         """Record iteration t = 0, 1, 2, ... (t = 0 is the initial assignment)."""
@@ -145,6 +154,21 @@ class StateMonitor:
             self.drift.append(float((step / _half_nearest(centers)).max()))
         self.H[t % (W + 1)] = lab
         self._C = np.array(centers, dtype=np.float64, copy=True)
+        if self._Cring is None:
+            self._Cring = np.empty((W + 1,) + self._C.shape)
+        self._Cring[t % (W + 1)] = self._C
+
+    def travel(self):
+        """Max center displacement over the window relative to the mean one-step drift."""
+        W, t = self.params.window, self.t
+        if t < W or W < 2:
+            return float("inf")
+        step = float(np.mean(self.drift[-W:]))
+        if step <= 0:
+            return 0.0
+        C = self._Cring[t % (W + 1)]
+        move = np.sqrt(((C - self._Cring[(t - W) % (W + 1)]) ** 2).sum(1)) / _half_nearest(C)
+        return float(move.max() / step)
 
     def window(self, idx, t=None):
         t = self.t if t is None else t
@@ -172,7 +196,10 @@ class StateMonitor:
             return self._log(False, "running", state)
         # representatives
         d = self.drift[-1]
-        reps = d <= p.center_tol or (plateau(self.drift, W, p.plateau_ratio) and d <= p.center_noise_tol)
+        d_mean = float(np.mean(self.drift[-W:]))
+        travel = self.travel()
+        reps = d_mean <= p.center_tol or (plateau(self.drift, W, p.plateau_ratio) and d <= p.center_noise_tol
+                                          and travel <= p.travel_ratio)
         # partitions
         U = self.unstable()
         cur = self.H[t % (W + 1)].astype(np.int64)
@@ -185,7 +212,7 @@ class StateMonitor:
         osc = float((switches(self.window(U)) >= 2).mean()) if len(U) else 0.0
         rho = projected_changes(self.counts, W, self.n)
         flat = plateau(self.counts, W, p.plateau_ratio)
-        state.update(center_drift=d, representatives_stable=bool(reps), cluster_unstable=cl_unstable,
+        state.update(center_drift=d, center_drift_window=d_mean, center_travel=travel, representatives_stable=bool(reps), cluster_unstable=cl_unstable,
                      size_change=size_change, partitions_stable=bool(parts), oscillating_share=osc,
                      projected_changes=rho, counts_plateau=bool(flat))
         if reps and parts:

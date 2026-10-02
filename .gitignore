@@ -13,3 +13,5 @@ experiments/results/oscillators_*.npz
 dist/
 build/
 experiments/results/auto_rule*.csv
+experiments/results/color_quant*.csv
+experiments/results/vq_codebook*.csv

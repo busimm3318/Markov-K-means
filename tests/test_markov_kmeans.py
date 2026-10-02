@@ -226,3 +226,29 @@ def test_settle_in_oscillation_regime_uses_occupancy_for_every_point():
     assert list(labels) == [0, 1]
     labels_d, _, _, _ = _rules.settle(hist, hist[-1], rule="auto", regime="drift")
     assert list(labels_d) == [1, 1]
+
+
+def test_monitor_waits_while_centers_travel_under_jitter():
+    base = np.r_[np.zeros(500, int), np.ones(500, int)]
+
+    def labels(t):
+        lab = base.copy()
+        lab[:20] = t % 2
+        return lab
+
+    def centers(drift):
+        rng = np.random.default_rng(0)
+        jitter = rng.normal(scale=0.04, size=(61, 2, 2))
+        return lambda t: np.array([[0.0, 0.0], [10.0, 0.0]]) + jitter[t] + [[drift * t, 0.0], [0.0, 0.0]]
+
+    params = _rules.StopParams(window=10, min_iter=10)
+    # jitter at a noise floor, but center 0 keeps moving one way: not stable yet
+    mon = _rules.StateMonitor(1000, 2, params, exact=False)
+    t, (stop, regime, state) = _run(mon, 60, labels, centers(0.04))
+    assert not stop, (t, state)
+    assert state["center_drift"] <= params.center_noise_tol and state["center_travel"] > params.travel_ratio
+    # the same jitter around fixed centers: stable, the oscillation is settled
+    mon = _rules.StateMonitor(1000, 2, params, exact=False)
+    t, (stop, regime, state) = _run(mon, 60, labels, centers(0.0))
+    assert stop and regime == "oscillation", state
+    assert state["center_travel"] <= params.travel_ratio
