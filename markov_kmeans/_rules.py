@@ -208,40 +208,44 @@ class StateMonitor:
             return self._log(True, "converged", state)
         if t < max(p.min_iter, W):
             return self._log(False, "running", state)
-        u = float((self.last_change > t - W).mean())
+        U = self.unstable()
+        u = len(U) / self.n
         state["unstable_frac"] = u
         if u <= p.unstable_tol:
             return self._log(True, "drift", state)
         if self.rule != "auto" or u > p.max_unstable:
             return self._log(False, "running", state)
+        # The groups are judged in order of cost; a failed group ends the iteration's judgement.
         # representatives
         d = self.drift[-1]
         d_mean = float(np.mean(self.drift[-W:]))
         travel = self.travel()
         reps = d_mean <= p.center_tol or (plateau(self.drift, W, p.plateau_ratio) and d <= p.center_noise_tol
                                           and travel <= p.travel_ratio)
+        state.update(center_drift=d, center_drift_window=d_mean, center_travel=travel, representatives_stable=bool(reps))
+        if not reps:
+            return self._log(False, "running", state)
         # partitions
-        U = self.unstable()
-        cur = self.H[t % (W + 1)].astype(np.int64)
+        cur = self.H[t % (W + 1)]
         sizes = np.bincount(cur, minlength=self.k).astype(float)
-        old = np.bincount(self.H[(t - W) % (W + 1)].astype(np.int64), minlength=self.k).astype(float)
+        old = np.bincount(self.H[(t - W) % (W + 1)], minlength=self.k).astype(float)
         cl_unstable = float((np.bincount(cur[U], minlength=self.k) / np.maximum(sizes, 1)).max())
         size_change = float((np.abs(sizes - old) / np.maximum(old, 1)).max())
         Hw = self.window(U)
         flow = net_flow(Hw, self.k) if len(U) else 0.0
         parts = size_change <= p.size_tol and (cl_unstable <= p.cluster_tol or flow <= p.flow_tol)
-        # movement
+        state.update(cluster_unstable=cl_unstable, size_change=size_change, net_flow=flow, partitions_stable=bool(parts))
+        if not parts:
+            return self._log(False, "running", state)
+        # movement: oscillation plateau, or few changes left
         osc = float((switches(Hw) >= 2).mean()) if len(U) else 0.0
         rho = projected_changes(self.counts, W, self.n)
         flat = plateau(self.counts, W, p.plateau_ratio)
-        state.update(center_drift=d, center_drift_window=d_mean, center_travel=travel, representatives_stable=bool(reps), cluster_unstable=cl_unstable,
-                     size_change=size_change, net_flow=flow, partitions_stable=bool(parts), oscillating_share=osc,
-                     projected_changes=rho, counts_plateau=bool(flat))
-        if reps and parts:
-            if osc >= p.osc_share and flat:
-                return self._log(True, "oscillation", state)
-            if rho <= p.change_tol:
-                return self._log(True, "drift", state)
+        state.update(oscillating_share=osc, projected_changes=rho, counts_plateau=bool(flat))
+        if osc >= p.osc_share and flat:
+            return self._log(True, "oscillation", state)
+        if rho <= p.change_tol:
+            return self._log(True, "drift", state)
         return self._log(False, "running", state)
 
     def _log(self, stop, regime, state):

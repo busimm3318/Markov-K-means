@@ -77,17 +77,23 @@ STATE_KEYS = ("unstable_frac", "center_drift", "center_travel", "cluster_unstabl
 
 
 def replay_stop(traj, params, exact, rule, k):
-    """Same StateMonitor as MarkovKMeans.fit, fed with the recorded trajectory."""
+    """Same StateMonitor as MarkovKMeans.fit, fed with the recorded trajectory.
+
+    The monitor's own time (push + assess, as paid inside fit) is returned in
+    state["monitor_seconds"] so that the cost of a stopping rule includes it.
+    """
     H, C, counts = traj["H"], traj["C"], traj["counts"]
     mon = _rules.StateMonitor(H.shape[1], k, params, exact=exact, rule=rule)
     mon.push(H[0], C[0])
-    state = {}
+    state, spent = {}, 0.0
     for t in range(1, len(H)):
+        t0 = time.perf_counter()
         mon.push(H[t], C[t], int(counts[t - 1]))
         stop, regime, state = mon.assess()
+        spent += time.perf_counter() - t0
         if stop:
-            return t, REASON(regime, state, params), mon.last_change.copy(), state
-    return len(H) - 1, "max_iter", mon.last_change.copy(), state
+            return t, REASON(regime, state, params), mon.last_change.copy(), {**state, "monitor_seconds": spent}
+    return len(H) - 1, "max_iter", mon.last_change.copy(), {**state, "monitor_seconds": spent}
 
 
 def first_t(cond, T):
@@ -115,9 +121,10 @@ def evaluate(name, regime, traj, X, k, t, reason, last_change, assign, ref, occ,
     else:
         C = traj["C"][t]
     full = len(H) - 1
+    monitor = (extra or {}).get("monitor_seconds", 0.0)
     row = dict(policy=name, T_stop=t, stop_reason=reason, n_U=len(U),
                dist_frac=traj["ndist"][t] / traj["ndist"][full],
-               time_frac=traj["secs"][t] / traj["secs"][full],
+               time_frac=(traj["secs"][t] + monitor) / traj["secs"][full], monitor_seconds=monitor,
                disagree_rate=float((labels != ref).mean()),
                U_err=float((labels[U] != ref[U]).mean()) if len(U) else 0.0,
                sse=float(inertia(X, C, labels)), soft_tv_U=soft_tv)
@@ -125,10 +132,10 @@ def evaluate(name, regime, traj, X, k, t, reason, last_change, assign, ref, occ,
     return row
 
 
-def write(path, row):
+def write(path, row, fields):
     new = not path.exists()
     with path.open("a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(row))
+        w = csv.DictWriter(f, fieldnames=fields, restval="")
         if new:
             w.writeheader()
         w.writerow(row)
@@ -151,6 +158,7 @@ def run_instance(regime, n, d, k, sep, seed, eta, out, check=False):
     # 1) the package's automatic rules (and variants of the assignment at the same stop)
     t, reason, lc, state = replay_stop(traj, params, exact, "auto", k)
     at_stop = {f"state_{key}": state.get(key, "") for key in STATE_KEYS}
+    at_stop["monitor_seconds"] = state["monitor_seconds"]
     if check:
         mk = MarkovKMeans(k, init=C0, algorithm="hamerly" if exact else "minibatch",
                           learning_rate="constant" if regime == "minibatch_const" else "count",
@@ -160,8 +168,9 @@ def run_instance(regime, n, d, k, sep, seed, eta, out, check=False):
     for assign in ("auto", "markov", "frequency", "keep"):
         rows.append(evaluate(f"auto_stop+{assign}", regime, traj, X, k, t, reason, lc, assign, ref, occ, W, at_stop))
     # 2) the 0.1.0 default: unstable fraction <= 1e-3 only, Markov assignment
-    t, reason, lc, _ = replay_stop(traj, params, exact, "unstable", k)
-    rows.append(evaluate("v0.1.0(unstable_tol)+markov", regime, traj, X, k, t, reason, lc, "markov", ref, occ, W))
+    t, reason, lc, st = replay_stop(traj, params, exact, "unstable", k)
+    rows.append(evaluate("v0.1.0(unstable_tol)+markov", regime, traj, X, k, t, reason, lc, "markov", ref, occ, W,
+                         {"monitor_seconds": st["monitor_seconds"]}))
     # 3) common stopping rules of other implementations, labels kept as they are
     var = float(np.var(X, axis=0).mean())
     Cs = traj["C"]
@@ -178,7 +187,9 @@ def run_instance(regime, n, d, k, sep, seed, eta, out, check=False):
     full_sse = rows[-1]["sse"]
     for r in rows:
         r["rel_sse_vs_full"] = r["sse"] / full_sse - 1.0
-        write(out, {**inst, **r})
+    fields = list(dict.fromkeys(k for r in rows for k in {**inst, **r}))
+    for r in rows:
+        write(out, {**inst, **r}, fields)
         print(f"  {r['policy']:38s} stop={r['T_stop']:4d} ({r['stop_reason']:12s}) cost={r['dist_frac']:.3f}/{r['time_frac']:.3f} "
               f"err={r['disagree_rate']:.5f} U_err={r['U_err']:.3f} |U|={r['n_U']} tv={r['soft_tv_U']:.3f}", flush=True)
 
