@@ -87,8 +87,12 @@ Full report: [docs/results.md](https://github.com/busimm3318/Markov-K-means/blob
   * After a drift, fractional memberships are rare (0.2–9% of U) and mean "not yet decided": such points almost always end in one cluster. As a flag for points that will be wrong, they beat a GMM posterior in mini-batch runs (AUROC 0.71–0.98 vs 0.60–0.75).
   * In a persistent oscillation, 80% of these points really keep alternating, and π is calibrated to their long-run share (0.55 → 0.53, 0.85 → 0.83). Plain window frequency is as good.
 * **Automatic rule (n = 10⁶, 10 instances).**
-  * It uses 7–83% of the full run's time at an error of 0.05–0.62%.
-  * With a constant step, scikit-learn's tolerance rule never stops; the automatic rule stops at 7–68% with an error close to the full run's.
+  * It uses 6–83% of the full run's time at an error of 0.05–0.62%.
+  * With a constant step, scikit-learn's tolerance rule never stops; the automatic rule stops at 10–62% with an error close to the full run's.
+
+* **Applications.**
+  * Colour quantization of 100 photos (2–21 MP): image quality is within 0.01 dB of the converged result after about a third of the iterations. The automatic rule is safe there (≤ 0.002 dB lost) but conservative (79–84% of the time); fitting the palette on a sample is cheapest.
+  * EMA VQ codebooks (MobileNetV2 latents, pixel patches; the image-tokenizer setting): 5–26% of the vectors keep switching codes and the codes jitter by up to 60% of their spacing. The rule correctly declines to intervene, and distance-based soft tokens beat history-based ones.
 
 Use Markov-K-means as a principled stopping rule plus an uncertainty flag (or, under persistent oscillation, a soft membership) for the last unstable points. It is not an accuracy improvement over a converged run.
 
@@ -157,14 +161,15 @@ pip install markov-kmeans
 
 ### 검증 결과 요약
 
-수렴까지 100회 이상 걸리는 합성 사례(N=10⁷, d=128, N=3×10⁷)에서 T₀=10, 20, …, 90마다 같은 상태에서 비교했어요. 자세한 내용은 [docs/results.md](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md)에 있어요.
+수렴까지 100회 이상 걸리는 합성 사례(N=10⁷, d=128, N=3×10⁷)에서 T₀=10, 20, …, 90마다 같은 상태에서 비교했어요. 자세한 내용은 [docs/results.md](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md)와 [HTML 보고서](https://github.com/busimm3318/Markov-K-means/blob/main/docs/report.html)에 있어요.
 
 | 질문 | 결과 |
 |---|---|
 | 계산량 | Lloyd를 끝까지 돌리는 것보다 거리 계산을 81–98% 줄인다. Hamerly 대비 시간 52–68%(N=3×10⁷에서 73–84%)를 줄인다. 절감은 **멈춤**에서 나오고, Markov 편입은 Hamerly 반복 약 1회 비용만 더한다. |
 | 오차 | 표류 체제에서 Markov 편입은 "현재 라벨 유지"와 같은 수준이고, 다수결의 함정(이미 옮긴 점을 되돌림, 43–53% 오류)을 피한다. 남은 오차의 90% 이상은 U 밖에서 나온다. 영구 진동 체제에서는 점유율·Markov 편입이 유지보다 낫다(U 오류 11–21% 대 23–30%). |
 | 연속 해석 | 표류 체제에서 분수형 π는 드물고(U의 0.2–9%) "아직 미결정"의 신호다. mini-batch에서는 틀릴 점 탐지에서 GMM 사후보다 낫다(AUROC 0.71–0.98 대 0.60–0.75). 영구 진동 체제에서는 그런 점의 80%가 실제로 계속 오가고, π가 장기 점유율에 맞게 보정돼 있다(0.55→0.53, 0.85→0.83). |
-| 자동 판단 | N=10⁶ 10개 사례에서 끝까지 돌린 시간의 7–83%로 오류율 0.05–0.62%를 낸다. 상수 스텝에서는 sklearn식 규칙이 끝내 멈추지 못하지만, 자동 규칙은 7–68% 시점에서 멈추고 끝까지 돌린 결과와 비슷한 오류를 낸다. |
+| 응용 | 색 양자화(사진 100장)에서는 반복의 약 1/3 시점에 화질이 이미 끝까지 돌린 결과와 0.01 dB 안으로 들어온다. 자동 규칙은 안전하지만(손실 0.002 dB 이하) 보수적이고(시간 79–84%), 표본 학습이 가장 싸다. EMA VQ 코드북(이미지 토크나이저)에서는 벡터의 5–26%가 계속 코드를 바꾸고 코드가 크게 흔들려 자동 규칙이 개입하지 않았다. soft 토큰은 거리 기반이 이력 기반보다 낫다. |
+| 자동 판단 | N=10⁶ 10개 사례에서 끝까지 돌린 시간의 6–83%로 오류율 0.05–0.62%를 낸다. 상수 스텝에서는 sklearn식 규칙이 끝내 멈추지 못하지만, 자동 규칙은 10–62% 시점에서 멈추고 끝까지 돌린 결과와 비슷한 오류를 낸다. |
 
 **권장 사용법:** 극소수 비수렴 점 때문에 반복을 계속하는 비용을 줄이는 정지 규칙, 그리고 그 점들의 불확실성 표시로 쓴다. 영구 진동 체제에서는 소속 비율로도 쓴다. 끝까지 수렴한 결과보다 정확해지는 방법으로 기대하면 안 된다.
 
