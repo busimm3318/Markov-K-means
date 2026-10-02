@@ -72,8 +72,8 @@ def reference(regime, traj, k):
 REASON = lambda regime, state, p: {"converged": "converged", "oscillation": "oscillation",
                                    "drift": "few_unstable" if state.get("unstable_frac", 1) <= p.unstable_tol
                                    else "stable_drift"}[regime]
-STATE_KEYS = ("unstable_frac", "center_drift", "cluster_unstable", "size_change", "oscillating_share",
-              "projected_changes")
+STATE_KEYS = ("unstable_frac", "center_drift", "center_travel", "cluster_unstable", "size_change", "net_flow",
+              "oscillating_share", "projected_changes")
 
 
 def replay_stop(traj, params, exact, rule, k):
@@ -209,6 +209,8 @@ def main(argv=None):
             run_instance("exact", a.n, 16, 50, sep, seed, 0.0, out)
         run_instance("minibatch", a.n, 16, 50, sep, 0, 0.0, out)
         run_instance("minibatch_const", a.n, 16, 50, sep, 0, 2e-4, out)
+    run_instance("minibatch_const", a.n, 16, 50, 1.5, 1, 2e-4, out)    # second seed
+    run_instance("minibatch_const", a.n, 16, 50, 1.5, 0, 1e-3, out)    # larger step: stronger jitter
     print(json.dumps({"done": True}))
 
 

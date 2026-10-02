@@ -26,8 +26,13 @@ Representatives — how stable the centers are
 Partitions — how stable the clusters are
     ``cluster_unstable``   max over clusters of the share of its members still moving
     ``size_change``        max over clusters of the relative size change over the window
-    stable when both are below ``cluster_tol`` and ``size_tol`` (no cluster is being
-    reorganised; only boundary points move)
+    ``net_flow``           net over gross transfers between pairs of clusters in the window
+                           (0: every move from A to B is matched by one from B to A; 1: all
+                           moves go one way)
+    stable when no cluster changes size by more than ``size_tol`` and either few of its
+    members move (``cluster_unstable <= cluster_tol``) or the moves balance out
+    (``net_flow <= flow_tol``): no cluster is being reorganised, points only move across
+    boundaries back and forth
 
 Decision (``rule="auto"``)
     converged            no label changed (exact engines) -> stop, nothing to settle
@@ -70,10 +75,11 @@ class StopParams:
     plateau_ratio: float = 0.8
     change_tol: float = 1e-3
     center_tol: float = 1e-2
-    center_noise_tol: float = 5e-2
+    center_noise_tol: float = 0.25
     cluster_tol: float = 0.1
     size_tol: float = 0.02
     travel_ratio: float = 2.0
+    flow_tol: float = 0.1
 
 
 def switches(Hw):
@@ -90,6 +96,20 @@ def plateau(values, window, ratio):
     h = window // 2
     first, second = c[:h].mean(), c[h:].mean()
     return first > 0 and second >= ratio * first
+
+
+def net_flow(Hw, k):
+    """Net over gross transfers between cluster pairs in a (W+1, m) label window."""
+    Hw = np.asarray(Hw, dtype=np.int64)
+    a, b = Hw[:-1].ravel(), Hw[1:].ravel()
+    moved = a != b
+    if not moved.any():
+        return 0.0
+    pair = np.minimum(a[moved], b[moved]) * k + np.maximum(a[moved], b[moved])
+    sign = np.where(a[moved] < b[moved], 1, -1)
+    keys, inv = np.unique(pair, return_inverse=True)
+    net = np.abs(np.bincount(inv, weights=sign, minlength=len(keys))).sum()
+    return float(net / moved.sum())
 
 
 def projected_changes(counts, window, n):
@@ -207,13 +227,15 @@ class StateMonitor:
         old = np.bincount(self.H[(t - W) % (W + 1)].astype(np.int64), minlength=self.k).astype(float)
         cl_unstable = float((np.bincount(cur[U], minlength=self.k) / np.maximum(sizes, 1)).max())
         size_change = float((np.abs(sizes - old) / np.maximum(old, 1)).max())
-        parts = cl_unstable <= p.cluster_tol and size_change <= p.size_tol
+        Hw = self.window(U)
+        flow = net_flow(Hw, self.k) if len(U) else 0.0
+        parts = size_change <= p.size_tol and (cl_unstable <= p.cluster_tol or flow <= p.flow_tol)
         # movement
-        osc = float((switches(self.window(U)) >= 2).mean()) if len(U) else 0.0
+        osc = float((switches(Hw) >= 2).mean()) if len(U) else 0.0
         rho = projected_changes(self.counts, W, self.n)
         flat = plateau(self.counts, W, p.plateau_ratio)
         state.update(center_drift=d, center_drift_window=d_mean, center_travel=travel, representatives_stable=bool(reps), cluster_unstable=cl_unstable,
-                     size_change=size_change, partitions_stable=bool(parts), oscillating_share=osc,
+                     size_change=size_change, net_flow=flow, partitions_stable=bool(parts), oscillating_share=osc,
                      projected_changes=rho, counts_plateau=bool(flat))
         if reps and parts:
             if osc >= p.osc_share and flat:

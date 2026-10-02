@@ -168,13 +168,26 @@ def test_monitor_waits_while_representatives_move():
 def test_monitor_waits_while_a_cluster_reorganises():
     C = np.array([[0.0, 0.0], [10.0, 0.0]])
 
-    def labels(t):           # 15% of cluster 0 keeps flipping: not boundary noise
+    def labels(t):           # cluster 0 loses 10 members per iteration, all to cluster 1
+        lab = np.r_[np.zeros(500, int), np.ones(500, int)]
+        lab[:min(10 * t, 300)] = 1
+        return lab
+
+    t, (stop, regime, state) = _run(_monitor(max_unstable=0.2), 25, labels, lambda t: C)
+    assert not stop and not state["partitions_stable"] and state["net_flow"] == 1.0, state
+
+
+def test_monitor_accepts_a_balanced_oscillation_of_many_members():
+    C = np.array([[0.0, 0.0], [10.0, 0.0]])
+
+    def labels(t):           # 15% of cluster 0 flips back and forth: moves balance out
         lab = np.r_[np.zeros(500, int), np.ones(500, int)]
         lab[:75] = t % 2
         return lab
 
     t, (stop, regime, state) = _run(_monitor(max_unstable=0.2), 30, labels, lambda t: C)
-    assert not stop and not state["partitions_stable"] and state["cluster_unstable"] > 0.1, state
+    assert state["cluster_unstable"] > 0.1 and state["net_flow"] == 0.0
+    assert stop and regime == "oscillation" and state["partitions_stable"], state
 
 
 def test_monitor_tail_and_convergence():

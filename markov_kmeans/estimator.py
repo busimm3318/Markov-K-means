@@ -25,8 +25,8 @@ class MarkovKMeans:
     * representatives — the largest center move relative to half the distance to the
       nearest other center, which must be small, or have settled at a noise floor with the
       centers jittering around fixed points rather than travelling;
-    * partitions — no cluster may still be reorganising (share of its members moving,
-      relative change of its size over the window).
+    * partitions — no cluster may still be reorganising: its size is steady over the window
+      and either few of its members move or their moves between clusters balance out.
 
     The Markov step intervenes (the run stops and U is settled from its label histories)
     when only a few vectors move and centers and partitions are stable, and either the
@@ -60,9 +60,10 @@ class MarkovKMeans:
         Representative stability: relative center drift, averaged over the window, below
         ``center_tol``; or flat, below ``center_noise_tol`` and with the displacement over the
         window at most ``travel_ratio`` times the mean one-step drift (jitter, not travel).
-    cluster_tol, size_tol : float
-        Partition stability: max share of a cluster's members still moving, max relative
-        cluster-size change over the window.
+    cluster_tol, size_tol, flow_tol : float
+        Partition stability: max relative cluster-size change over the window
+        (``size_tol``), and either max share of a cluster's members still moving
+        (``cluster_tol``) or max net / gross transfer between clusters (``flow_tol``).
     min_iter, max_iter : int
     window : int
         Length W of the label window that defines U and feeds the assignment.
@@ -100,8 +101,8 @@ class MarkovKMeans:
     def __init__(self, n_clusters=8, *, algorithm="hamerly", init="k-means++", t0=None,
                  stop_rule="auto", assign_rule="auto", unstable_tol=1e-3, max_unstable=0.2,
                  osc_share=0.3, plateau_ratio=0.8, change_tol=1e-3, center_tol=1e-2,
-                 center_noise_tol=5e-2, travel_ratio=2.0, cluster_tol=0.1, size_tol=0.02, min_iter=10,
-                 max_iter=300, window=10,
+                 center_noise_tol=0.25, travel_ratio=2.0, cluster_tol=0.1, size_tol=0.02, flow_tol=0.1,
+                 min_iter=10, max_iter=300, window=10,
                  alpha=0.0, pooled_prior=0.0, oscillation_rule="frequency", center_update="auto",
                  batch_size=4096, learning_rate="count", eta=2e-4, random_state=None):
         self.n_clusters = n_clusters
@@ -120,6 +121,7 @@ class MarkovKMeans:
         self.travel_ratio = travel_ratio
         self.cluster_tol = cluster_tol
         self.size_tol = size_tol
+        self.flow_tol = flow_tol
         self.oscillation_rule = oscillation_rule
         self.min_iter = min_iter
         self.max_iter = max_iter
@@ -177,7 +179,8 @@ class MarkovKMeans:
             window=W, min_iter=self.min_iter, unstable_tol=self.unstable_tol,
             max_unstable=self.max_unstable, osc_share=self.osc_share, plateau_ratio=self.plateau_ratio,
             change_tol=self.change_tol, center_tol=self.center_tol, center_noise_tol=self.center_noise_tol,
-            travel_ratio=self.travel_ratio, cluster_tol=self.cluster_tol, size_tol=self.size_tol)
+            travel_ratio=self.travel_ratio, cluster_tol=self.cluster_tol, size_tol=self.size_tol,
+            flow_tol=self.flow_tol)
         engine = self._engine(X, self._initial_centers(X))
         monitor = _rules.StateMonitor(n, k, params, exact=engine.exact, rule=self.stop_rule)
         monitor.push(engine.labels, engine.centers)
