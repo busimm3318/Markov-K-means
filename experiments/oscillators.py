@@ -4,7 +4,7 @@ The T0 sweep (experiments/markov_tail.py) only stores aggregates.  The continuou
 reading "π = [0.5, 0.5] means half in each cluster" is tested here point by point: for
 every T0 the unstable points whose chain gives a fractional π are dumped together with
 what actually happened later — the converged label (exact regime), the long-run label
-occupancy over the last 50 epochs (mini-batch), the converged model's own posterior,
+occupancy over the last 50 epochs (mini-batch), the converged model's own posterior (oracle), the plug-in posterior at T0,
 the generative posterior, and the geometric margin at T0.
 
     python -m experiments.oscillators --regime minibatch --n 2000000 --k 50 --sep 1.5
@@ -26,13 +26,14 @@ from kmeans_accel.minibatch_epochs import minibatch_epochs
 
 def main(argv=None):
     p = argparse.ArgumentParser()
-    p.add_argument("--regime", choices=["exact", "minibatch"], required=True)
+    p.add_argument("--regime", choices=["exact", "minibatch", "minibatch_const"], required=True)
     p.add_argument("--n", type=int, required=True)
     p.add_argument("--d", type=int, default=16)
     p.add_argument("--k", type=int, default=50)
     p.add_argument("--sep", type=float, default=1.5)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--epochs", type=int, default=200)
+    p.add_argument("--eta", type=float, default=2e-4, help="minibatch_const: fixed per-point step")
     a = p.parse_args(argv)
     tag = f"{a.regime}-n{a.n}-d{a.d}-k{a.k}-sep{a.sep}-s{a.seed}"
     X, z, means = datasets.gmm(a.n, a.d, a.k, sep=a.sep, seed=a.seed)
@@ -44,13 +45,14 @@ def main(argv=None):
         ref_labels, ref_C, T_conv = res.labels.astype(np.int64), res.centers, res.n_iter
     else:
         rec = MBRecorder(a.n, a.k, t_keep, a.epochs)
-        ref_C, _ = minibatch_epochs(X, C0, a.epochs, seed=a.seed, callback=rec)
+        ref_C, _ = minibatch_epochs(X, C0, a.epochs, seed=a.seed, callback=rec,
+                                    lr="constant" if a.regime == "minibatch_const" else "count", eta=a.eta)
         ref_labels = rec.modal_labels()
         T_conv = a.epochs
     print(f"[{time.strftime('%H:%M:%S')}] {tag}: reference done, T_conv={T_conv}", flush=True)
     model_params = tail.gmm_params(X, ref_labels, ref_C)
     out = {k_: [] for k_ in ("T0", "idx", "a", "b", "pi_a", "freq_a", "label_T0", "ref", "occ_a", "occ_b",
-                             "model_a", "model_b", "true_a", "true_b", "margin", "n_switch")}
+                             "model_a", "model_b", "plug_a", "plug_b", "true_a", "true_b", "margin", "n_switch")}
     from scipy.optimize import linear_sum_assignment
     r_, c_ = linear_sum_assignment(np.linalg.norm(ref_C[:, None] - means[None], axis=2))
     fit2true = np.empty(a.k, dtype=np.int64)
@@ -77,9 +79,14 @@ def main(argv=None):
         D = tail._sqdist_subset(X, Uf, C_T)
         Ds = np.sort(D, axis=1)
         margin = (np.sqrt(Ds[:, 1]) - np.sqrt(Ds[:, 0])) / (np.sqrt(Ds[:, 1]) + np.sqrt(Ds[:, 0]))
-        Mp = tail.soft_gmm(X, ref_labels, ref_C, Uf, params=model_params)
+        Mp = tail.soft_gmm(X, ref_labels, ref_C, Uf, params=model_params)   # oracle: converged model
+        if a.regime == "exact":
+            C_star = tail.compute_centers(X, L, C_T)[0]
+        else:
+            C_star = C_T
+        Pp = tail.soft_gmm(X, L, C_star, Uf, params=tail.gmm_params(X, L, C_star))  # available at T0
         Tp = tail.true_posterior(X, Uf, means)
-        if a.regime == "minibatch":
+        if a.regime.startswith("minibatch"):
             occ = rec.occupancy(Uf, a.k)
             oa, ob = occ[rows, sa], occ[rows, sb]
         else:
@@ -97,6 +104,8 @@ def main(argv=None):
         out["occ_b"].append(ob)
         out["model_a"].append(Mp[rows, sa])
         out["model_b"].append(Mp[rows, sb])
+        out["plug_a"].append(Pp[rows, sa])
+        out["plug_b"].append(Pp[rows, sb])
         out["true_a"].append(Tp[rows, fit2true[sa]])
         out["true_b"].append(Tp[rows, fit2true[sb]])
         out["margin"].append(margin)

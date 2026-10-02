@@ -16,6 +16,8 @@ import matplotlib.ticker  # noqa: E402,F401
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "experiments" / "results"
+REGIMES = ["exact", "minibatch", "minibatch_const"]
+RNAME = {"exact": "exact Lloyd", "minibatch": "mini-batch (1/count)", "minibatch_const": "mini-batch (constant step)"}
 FIG = ROOT / "docs" / "figures"
 TABLES = ROOT / "docs" / "tables"
 
@@ -117,10 +119,12 @@ def figures(df):
             (axes[0], "frac_U", "Unstable set U as a share of n", "|U| / n", True),
             (axes[1], "recall_V", "Later-changing points that are in U", "|U ∩ V| / |V|", False),
             (axes[2], "share_U_wrong", "Share of remaining errors that lie in U", "errors in U / all errors", False)):
-        for i, reg in enumerate(["exact", "minibatch"]):
+        for i, reg in enumerate(REGIMES):
             d = st[st.regime == reg].groupby("T0")[col].mean()
+            if d.empty:
+                continue
             ax.plot(d.index, d.values, color=SERIES[i], lw=2, marker=MARKERS[i], ms=6,
-                    markeredgecolor=SURFACE, markeredgewidth=1.5, label=reg)
+                    markeredgecolor=SURFACE, markeredgewidth=1.5, label=RNAME[reg])
         if logy:
             ax.set_yscale("log")
         _style(ax, title, ylab)
@@ -130,9 +134,9 @@ def figures(df):
     plt.close(fig)
 
     # Fig 2: compute saved by stopping at T0 + Markov assignment
-    mk = df[df.method == "markov"]
-    fig, axes = plt.subplots(1, 2, figsize=(10, 3.6))
-    ex = mk[mk.regime == "exact"]
+    mk_ = df[df.method == "markov"]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
+    ex = mk_[mk_.regime == "exact"]
     for i, (col, lab) in enumerate((("save_dist_vs_lloyd_full", "distances vs Lloyd to convergence"),
                                     ("save_dist_vs_base_full", "distances vs Hamerly to convergence"),
                                     ("save_sec_vs_lloyd_full", "time vs BLAS Lloyd to convergence"),
@@ -140,16 +144,19 @@ def figures(df):
         d = ex.groupby("T0")[col].mean() * 100
         axes[0].plot(d.index, d.values, color=SERIES[i], lw=2, marker=MARKERS[i], ms=6,
                      markeredgecolor=SURFACE, markeredgewidth=1.5, label=lab)
-    _style(axes[0], "Exact regime: saving of Markov stop at T0", "saving (%)")
-    axes[0].legend(frameon=False, fontsize=8, labelcolor=INK2)
-    mb = mk[mk.regime == "minibatch"]
-    for i, (col, lab) in enumerate((("save_dist_vs_base_full", "distances vs mini-batch to the horizon"),
-                                    ("save_sec_vs_base_full", "time vs mini-batch to the horizon"))):
-        d = mb.groupby("T0")[col].mean() * 100
-        axes[1].plot(d.index, d.values, color=SERIES[i], lw=2, marker=MARKERS[i], ms=6,
-                     markeredgecolor=SURFACE, markeredgewidth=1.5, label=lab)
-    _style(axes[1], "Mini-batch regime: saving of Markov stop at T0", "saving (%)")
-    axes[1].legend(frameon=False, fontsize=8, labelcolor=INK2)
+    _style(axes[0], "exact Lloyd: saving of stopping at T0", "saving (%)")
+    axes[0].legend(frameon=False, fontsize=8, labelcolor=INK2, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2)
+    for ax, reg in ((axes[1], "minibatch"), (axes[2], "minibatch_const")):
+        mb = mk_[mk_.regime == reg]
+        for i, (col, lab) in enumerate((("save_dist_vs_base_full", "distances vs 200-epoch run"),
+                                        ("save_sec_vs_base_full", "time vs 200-epoch run"))):
+            d = mb.groupby("T0")[col].mean() * 100
+            if d.empty:
+                continue
+            ax.plot(d.index, d.values, color=SERIES[i], lw=2, marker=MARKERS[i], ms=6,
+                    markeredgecolor=SURFACE, markeredgewidth=1.5, label=lab)
+        _style(ax, f"{RNAME[reg]}: saving of stopping at T0", "saving (%)")
+        ax.legend(frameon=False, fontsize=8, labelcolor=INK2, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2)
     fig.tight_layout()
     fig.savefig(FIG / "fig2_compute_saving.png", dpi=150)
     plt.close(fig)
@@ -158,11 +165,12 @@ def figures(df):
     names = {"stop": "keep current label", "majority": "majority vote", "markov": "Markov (proposed)",
              "active_set_U": "active-set Lloyd on U", "hartigan_U": "Hartigan on U",
              "reassign_U": "reassign U to nearest", "markov_a0.5": "Markov, smoothed (α=0.5)"}
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.6))
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.8))
+    mb_methods = ["stop", "majority", "markov", "markov_a0.5", "reassign_U"]
     for ax, reg, methods in ((axes[0], "exact", ["stop", "majority", "markov", "markov_a0.5", "active_set_U", "hartigan_U"]),
-                             (axes[1], "minibatch", ["stop", "majority", "markov", "markov_a0.5", "reassign_U"])):
+                             (axes[1], "minibatch", mb_methods), (axes[2], "minibatch_const", mb_methods)):
         lines(ax, df[df.regime == reg], methods, "U_err_rate", names)
-        _style(ax, f"{reg}: share of U left with a wrong label", "wrong labels in U / |U| (log)")
+        _style(ax, f"{RNAME[reg]}: wrong labels left in U", "wrong labels in U / |U| (log)")
         ax.set_yscale("log")
         ax.yaxis.set_minor_formatter(matplotlib.ticker.LogFormatterSciNotation(minor_thresholds=(2, 0.5)))
     fig.tight_layout()
@@ -174,13 +182,13 @@ def figures(df):
     snames = {"stop": "keep current label (0/1)", "markov_soft": "Markov (proposed)", "markov_a0.5_soft": "Markov, smoothed α=0.5",
               "markov_pooled_soft": "Markov, pooled prior", "frequency_soft": "label frequency",
               "gmm_plugin_soft": "plug-in GMM posterior"}
-    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-    for col_i, reg in enumerate(["exact", "minibatch"]):
+    fig, axes = plt.subplots(2, 3, figsize=(17, 9.5))
+    for col_i, reg in enumerate(REGIMES):
         d = df[df.regime == reg]
         lines(axes[0, col_i], d, soft, "brier_ref", snames)
-        _style(axes[0, col_i], f"{reg}: Brier score vs converged label (lower is better)", "Brier")
+        _style(axes[0, col_i], f"{RNAME[reg]}: Brier vs final label (lower = better)", "Brier")
         lines(axes[1, col_i], d, soft, "auroc_err_ref", snames)
-        _style(axes[1, col_i], f"{reg}: AUROC, uncertainty flags wrong labels", "AUROC")
+        _style(axes[1, col_i], f"{RNAME[reg]}: AUROC, uncertainty flags wrong labels", "AUROC")
     fig.tight_layout()
     fig.savefig(FIG / "fig4_soft_quality.png", dpi=150)
     plt.close(fig)
@@ -209,6 +217,16 @@ def tables(df):
     return state, compute, err, soft, inst
 
 
+def predictors(z):
+    """Two-state probability that the point ends in state a, from each competing source."""
+    two = lambda pa, pb: pa / np.maximum(pa + pb, 1e-300)
+    out = [("markov_pi", z["pi_a"]), ("frequency", z["freq_a"])]
+    if "plug_a" in z.files:
+        out.append(("plugin_posterior_T0", two(z["plug_a"], z["plug_b"])))
+    out.append(("model_posterior_oracle", two(z["model_a"], z["model_b"])))
+    return out
+
+
 def oscillator_report():
     """Reliability of fractional π: does π(a) match how often the point really ends in a?"""
     rows = []
@@ -216,18 +234,16 @@ def oscillator_report():
         z = np.load(f)
         if len(z["idx"]) == 0:
             continue
-        regime = f.name.split("_")[1].split("-")[0]
-        out = (z["occ_a"] if regime == "minibatch" else (z["ref"] == z["a"]).astype(float))
+        regime = f.name[len("oscillators_"):].split("-")[0]
+        out = (z["occ_a"] if regime.startswith("minibatch") else (z["ref"] == z["a"]).astype(float))
         for lo, hi in ((0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)):
-            for name, pred in (("markov_pi", z["pi_a"]), ("frequency", z["freq_a"]),
-                               ("model_posterior", z["model_a"] / np.maximum(z["model_a"] + z["model_b"], 1e-300))):
+            for name, pred in predictors(z):
                 m = (pred >= lo) & (pred < hi) if hi < 1 else (pred >= lo)
                 if m.any():
                     rows.append(dict(file=f.name, regime=regime, predictor=name, bin=f"[{lo:.1f},{hi:.1f})",
                                      n=int(m.sum()), mean_pred=float(pred[m].mean()),
                                      observed=float(out[m].mean())))
-        for name, pred in (("markov_pi", z["pi_a"]), ("frequency", z["freq_a"]),
-                           ("model_posterior", z["model_a"] / np.maximum(z["model_a"] + z["model_b"], 1e-300))):
+        for name, pred in predictors(z):
             rows.append(dict(file=f.name, regime=regime, predictor=name, bin="all", n=len(pred),
                              mean_pred=float(pred.mean()), observed=float(out.mean()),
                              brier=float(((pred - out) ** 2).mean()),

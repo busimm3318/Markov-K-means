@@ -5,7 +5,9 @@ to convergence while each point's label history is recorded:
 
 * regime ``exact``      — Lloyd's algorithm (run with Hamerly's exact acceleration, which
                           produces the identical trajectory);
-* regime ``minibatch``  — Sculley mini-batch K-means, one iteration = one epoch.
+* regime ``minibatch``  — Sculley mini-batch K-means, one iteration = one epoch;
+* regime ``minibatch_const`` — the same with a fixed step ``eta`` (centers keep
+                          jittering, so a few points oscillate for ever).
 
 Only instances whose trajectory needs >= 100 iterations are kept.  At each cut-off
 T0 = 10, 20, ..., 90 every strategy starts from the *identical* state (labels and
@@ -46,7 +48,7 @@ EVAL_MAX = 200_000  # soft metrics are scored on a seeded random sample of U whe
 
 def strategies(regime):
     """name -> (callable, output is soft).  Same set and same inputs for every T0."""
-    fixed = regime == "minibatch"   # mini-batch: keep the stable representatives C_T
+    fixed = regime != "exact"   # mini-batch: keep the stable representatives C_T
     s = {
         "stop": (partial(tail.stop, fixed=fixed), False),
         "reassign_U": (partial(tail.reassign_u, fixed=fixed), False),
@@ -254,13 +256,14 @@ def lloyd_iteration_seconds(X, C0):
 
 def main(argv=None):
     p = argparse.ArgumentParser()
-    p.add_argument("--regime", choices=["exact", "minibatch"], required=True)
+    p.add_argument("--regime", choices=["exact", "minibatch", "minibatch_const"], required=True)
     p.add_argument("--n", type=int, required=True)
     p.add_argument("--d", type=int, default=16)
     p.add_argument("--k", type=int, default=50)
     p.add_argument("--sep", type=float, default=2.0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--epochs", type=int, default=200)
+    p.add_argument("--eta", type=float, default=2e-4, help="minibatch_const: fixed per-point step")
     p.add_argument("--out", default="")
     p.add_argument("--min-conv", type=int, default=MIN_CONV)
     p.add_argument("--eval-max", type=int, default=EVAL_MAX)
@@ -284,7 +287,8 @@ def main(argv=None):
         ref_C = res.centers
     else:
         rec = MBRecorder(a.n, a.k, t_keep, a.epochs)
-        ref_C, _ = minibatch_epochs(X, C0, a.epochs, seed=a.seed, callback=rec)
+        ref_C, _ = minibatch_epochs(X, C0, a.epochs, seed=a.seed, callback=rec,
+                                    lr="constant" if a.regime == "minibatch_const" else "count", eta=a.eta)
         ch_ = np.array(rec.changes)
         T_conv = int(np.flatnonzero(ch_)[-1]) + 1 if ch_.any() else 0
         converged = T_conv < a.epochs - REF_WINDOW
@@ -335,7 +339,7 @@ def main(argv=None):
         ctx = {"ref_U": ref_U, "z_U": z[Ue], "fit2true": fit2true, "post_true": post_true,
                "model_post": tail.soft_gmm(X, ref_labels, ref_C, Ue, params=model_params),
                "matched": matched_cluster[ref_U] & matched_cluster[L[Ue]],
-               "ref_soft": rec.occupancy(Ue, a.k) if a.regime == "minibatch" else None}
+               "ref_soft": rec.occupancy(Ue, a.k) if a.regime.startswith("minibatch") else None}
         common = dict(meta, T0=T0, n_U=len(U), n_U_eval=len(Ue), frac_U=len(U) / a.n, n_V=int(V.sum()),
                       n_U_and_V=int(V[U].sum()), changes_at_T0=int(ch[T0]),
                       U_disagree_at_T0=int((L[U] != ref_labels[U]).sum()),
@@ -363,7 +367,7 @@ def main(argv=None):
             emit(name, r.labels, r.centers, Wsoft, r.n_dist, r.center_passes, r.seconds, r.extra)
 
         # soft comparators: memberships from distances to the current representatives
-        C_star = C_T if a.regime == "minibatch" else compute_centers(X, L, C_T)[0]
+        C_star = C_T if a.regime.startswith("minibatch") else compute_centers(X, L, C_T)[0]
         gparams = tail.gmm_params(X, L, C_star)
         for name, kind in (("fcm_soft", "fcm"), ("gmm_plugin_soft", "gmm")):
             t = time.perf_counter()
@@ -371,7 +375,7 @@ def main(argv=None):
                                                params=gparams if kind == "gmm" else None)
             lab = L.copy()
             lab[U] = labU
-            emit(name, lab, C_star, Wsoft, len(U) * a.k, 0 if a.regime == "minibatch" else 1,
+            emit(name, lab, C_star, Wsoft, len(U) * a.k, 0 if a.regime.startswith("minibatch") else 1,
                  time.perf_counter() - t)
 
         # references: running the base algorithm to convergence, and the true posterior
