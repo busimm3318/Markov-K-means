@@ -16,22 +16,29 @@ class MarkovKMeans:
     """Markov-K-means clustering.
 
     The base algorithm (exact Lloyd via Hamerly bounds by default, plain Lloyd, or
-    mini-batch) runs while the last ``window + 1`` labels of every point are kept in a
-    ring buffer.  After each iteration the global state decides whether to stop
-    (``stop_rule="auto"``, see :mod:`markov_kmeans._rules`):
+    mini-batch) runs while a :class:`markov_kmeans._rules.StateMonitor` judges, after each
+    iteration, the state of the whole run (``stop_rule="auto"``):
 
-    * ``converged`` — no label changed (exact engines);
-    * ``few_unstable`` — the unstable set U (points whose label changed within the last
-      ``window`` iterations) is at most ``unstable_tol`` of the data: a drifting tail;
-    * ``oscillation`` — U is at most ``max_unstable`` of the data, at least ``osc_share``
-      of it switched twice or more within the window, and the per-iteration change counts
-      stopped decreasing: the remaining points keep oscillating and will not settle;
-    * ``t0`` / ``max_iter`` — fixed budget.
+    * movement — the share of vectors still changing cluster within the last ``window``
+      iterations (the unstable set U), how many of them oscillate (switch twice or more),
+      and how many label changes are still to come judging by the decay of the counts;
+    * representatives — the largest center move relative to half the distance to the
+      nearest other center, which must be small or have settled at a noise floor;
+    * partitions — no cluster may still be reorganising (share of its members moving,
+      relative change of its size over the window).
 
-    The points of U are then settled from their label windows (``assign_rule="auto"``):
-    a point that switched at most once (it moved and stayed) keeps its current label, a
-    point that switched twice or more gets its window occupancy (hard: most frequent label;
-    soft: the occupancy, e.g. ``[0.5, 0.5]``).  ``assign_rule="markov"`` uses the long-run
+    The Markov step intervenes (the run stops and U is settled from its label histories)
+    when only a few vectors move and centers and partitions are stable, and either the
+    oscillation has reached a plateau (``stop_reason_="oscillation"``) or the projected
+    remaining changes are negligible (``"stable_drift"``); it also stops on convergence
+    (``"converged"``), when U is at most ``unstable_tol`` of the data (``"few_unstable"``),
+    at ``t0`` or at ``max_iter``.  ``decision_trace_`` records every judgement.
+
+    The points of U are then settled from their label windows (``assign_rule="auto"``),
+    depending on the diagnosed regime: in an oscillation every point of U gets its window
+    occupancy (hard: most frequent label; soft: the occupancy, e.g. ``[0.5, 0.5]``); in a
+    drift a point that switched at most once (it moved and stayed) keeps its current label
+    and only points that switched twice or more get their occupancy.  ``assign_rule="markov"`` uses the long-run
     law of each point's Markov chain instead (optionally smoothed by ``alpha`` and shrunk
     towards pooled moves by ``pooled_prior``); ``"frequency"`` the occupancy for every
     point; ``"keep"`` the current label.
@@ -46,8 +53,14 @@ class MarkovKMeans:
     stop_rule : {"auto", "unstable"}
         "unstable" only uses ``unstable_tol`` (the 0.1.0 behaviour).
     assign_rule : {"auto", "markov", "frequency", "keep"}
-    unstable_tol, max_unstable, osc_share, plateau_ratio : float
-        Thresholds of the stop rule (see above).
+    unstable_tol, max_unstable, osc_share, plateau_ratio, change_tol : float
+        Movement thresholds of the stop rule.
+    center_tol, center_noise_tol : float
+        Representative stability: relative center drift below ``center_tol``, or flat and
+        below ``center_noise_tol``.
+    cluster_tol, size_tol : float
+        Partition stability: max share of a cluster's members still moving, max relative
+        cluster-size change over the window.
     min_iter, max_iter : int
     window : int
         Length W of the label window that defines U and feeds the assignment.
@@ -74,15 +87,18 @@ class MarkovKMeans:
     oscillating_ : (|U|,) bool, points of U that switched at least twice in the window
     uncertainty_ : (|U|,) 1 - max probability
     membership_ : scipy.sparse CSR (n, n_clusters); one-hot outside U, soft law on U
-    stop_reason_ : "converged", "few_unstable", "oscillation", "t0" or "max_iter"
+    stop_reason_ : "converged", "few_unstable", "stable_drift", "oscillation", "t0" or "max_iter"
     regime_ : "converged", "drift" or "oscillation"
-    n_iter_, unstable_fraction_, oscillating_share_, change_counts_, inertia_, n_dist_,
-    fit_seconds_
+    decision_trace_ : list of dicts, the state judged at every iteration (movement,
+        representatives, partitions, decision)
+    n_iter_, unstable_fraction_, oscillating_share_, change_counts_, center_drift_, inertia_,
+    n_dist_, fit_seconds_
     """
 
     def __init__(self, n_clusters=8, *, algorithm="hamerly", init="k-means++", t0=None,
                  stop_rule="auto", assign_rule="auto", unstable_tol=1e-3, max_unstable=0.2,
-                 osc_share=0.3, plateau_ratio=0.8, min_iter=10, max_iter=300, window=10,
+                 osc_share=0.3, plateau_ratio=0.8, change_tol=1e-3, center_tol=1e-2,
+                 center_noise_tol=5e-2, cluster_tol=0.1, size_tol=0.02, min_iter=10, max_iter=300, window=10,
                  alpha=0.0, pooled_prior=0.0, oscillation_rule="frequency", center_update="auto",
                  batch_size=4096, learning_rate="count", eta=2e-4, random_state=None):
         self.n_clusters = n_clusters
@@ -95,6 +111,11 @@ class MarkovKMeans:
         self.max_unstable = max_unstable
         self.osc_share = osc_share
         self.plateau_ratio = plateau_ratio
+        self.change_tol = change_tol
+        self.center_tol = center_tol
+        self.center_noise_tol = center_noise_tol
+        self.cluster_tol = cluster_tol
+        self.size_tol = size_tol
         self.oscillation_rule = oscillation_rule
         self.min_iter = min_iter
         self.max_iter = max_iter
@@ -148,32 +169,20 @@ class MarkovKMeans:
             raise ValueError(f"stop_rule must be one of {_rules.STOP_RULES}")
         if self.assign_rule not in _rules.ASSIGN_RULES:
             raise ValueError(f"assign_rule must be one of {_rules.ASSIGN_RULES}")
-        params = _rules.StopParams(W, self.min_iter, self.unstable_tol, self.max_unstable,
-                                   self.osc_share, self.plateau_ratio)
+        params = _rules.StopParams(
+            window=W, min_iter=self.min_iter, unstable_tol=self.unstable_tol,
+            max_unstable=self.max_unstable, osc_share=self.osc_share, plateau_ratio=self.plateau_ratio,
+            change_tol=self.change_tol, center_tol=self.center_tol, center_noise_tol=self.center_noise_tol,
+            cluster_tol=self.cluster_tol, size_tol=self.size_tol)
         engine = self._engine(X, self._initial_centers(X))
-        dtype = np.uint8 if k <= 255 else (np.uint16 if k <= 65535 else np.int32)
-        H = np.empty((W + 1, n), dtype=dtype)       # ring buffer of the last W+1 labelings
-        H[0] = engine.labels
-        last_change = np.full(n, -1, dtype=np.int32)
-        counts = []
+        monitor = _rules.StateMonitor(n, k, params, exact=engine.exact, rule=self.stop_rule)
+        monitor.push(engine.labels, engine.centers)
 
-        def window_of(t, idx):
-            rows = [s_ % (W + 1) for s_ in range(max(0, t - W), t + 1)]
-            return H[np.ix_(rows, idx)]
-
-        def osc_share_of(t):
-            idx = np.flatnonzero(last_change > t - W)
-            return float((_rules.switches(window_of(t, idx)) >= 2).mean()) if len(idx) else 0.0
-
-        t, stop_reason, regime, osc = 0, "max_iter", "running", None
+        t, stop_reason, regime = 0, "max_iter", "running"
         while t < self.max_iter:
             changed = engine.step()
             t += 1
-            counts.append(changed)
-            lab = engine.labels.astype(dtype)
-            moved = lab != H[(t - 1) % (W + 1)]
-            last_change[moved] = t
-            H[t % (W + 1)] = lab
+            monitor.push(engine.labels, engine.centers, changed)
             if self.t0 is not None:
                 if changed == 0 and engine.exact:
                     stop_reason = regime = "converged"
@@ -182,15 +191,10 @@ class MarkovKMeans:
                     stop_reason = "t0"
                     break
                 continue
-            frac = float((last_change > t - W).mean())
-            osc = None
-            if (self.stop_rule == "auto" and t >= max(self.min_iter, W)
-                    and frac > self.unstable_tol and frac <= self.max_unstable):
-                osc = osc_share_of(t)
-            stop, regime = _rules.decide_stop(t, changed, frac, osc, counts, params, engine.exact,
-                                              rule=self.stop_rule)
+            stop, regime, _ = monitor.assess()
             if stop:
-                stop_reason = {"converged": "converged", "drift": "few_unstable",
+                stop_reason = {"converged": "converged", "drift": "few_unstable" if
+                               monitor.trace[-1].get("unstable_frac", 1) <= self.unstable_tol else "stable_drift",
                                "oscillation": "oscillation"}[regime]
                 break
 
@@ -203,14 +207,16 @@ class MarkovKMeans:
             oscillating = np.empty(0, dtype=bool)
             labels = L
         else:
-            U = np.flatnonzero(last_change > t - W).astype(np.int64)
+            U = monitor.unstable().astype(np.int64)
+            Hw = monitor.window(U)
+            if regime == "running":   # stopped by t0 or max_iter: classify from the window
+                share = float((_rules.switches(Hw) >= 2).mean()) if len(U) else 0.0
+                regime = "oscillation" if share >= self.osc_share else "drift"
             labels = L.copy()
             labels_U, S, P, oscillating = _rules.settle(
-                window_of(t, U), L[U], rule=self.assign_rule, alpha=self.alpha,
-                pooled_prior=self.pooled_prior, n_clusters=k, oscillation_rule=self.oscillation_rule)
+                Hw, L[U], rule=self.assign_rule, alpha=self.alpha, pooled_prior=self.pooled_prior,
+                n_clusters=k, oscillation_rule=self.oscillation_rule, regime=regime)
             labels[U] = labels_U
-            if regime == "running":   # stopped by t0 or max_iter: classify from the window
-                regime = "oscillation" if len(U) and oscillating.mean() >= self.osc_share else "drift"
 
         mode = self.center_update
         if mode == "auto":
@@ -236,7 +242,9 @@ class MarkovKMeans:
         self.regime_ = regime
         self.oscillating_ = oscillating
         self.oscillating_share_ = float(oscillating.mean()) if len(U) else 0.0
-        self.change_counts_ = np.asarray(counts, dtype=np.int64)
+        self.change_counts_ = np.asarray(monitor.counts, dtype=np.int64)
+        self.center_drift_ = np.asarray(monitor.drift)
+        self.decision_trace_ = monitor.trace
         self.unstable_fraction_ = len(U) / n
         self.inertia_ = float(inertia(X, centers, labels))
         self.n_dist_ = int(engine.n_dist)

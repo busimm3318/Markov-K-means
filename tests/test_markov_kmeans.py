@@ -114,18 +114,80 @@ def test_package_is_standalone(tmp_path):
 from markov_kmeans import _rules  # noqa: E402
 
 
-def test_decide_stop_states():
-    p = _rules.StopParams(window=4, min_iter=4, unstable_tol=1e-3, max_unstable=0.05,
-                          osc_share=0.5, plateau_ratio=0.8)
-    assert _rules.decide_stop(7, 0, 0.0, None, [5, 3, 1, 0], p, exact=True) == (True, "converged")
-    assert _rules.decide_stop(2, 9, 0.5, None, [9, 9], p, exact=True) == (False, "running")
-    assert _rules.decide_stop(9, 3, 5e-4, None, [9] * 9, p, exact=True) == (True, "drift")
-    flat = [100, 90, 80, 85, 80, 82, 79, 81, 80]
-    assert _rules.decide_stop(9, 80, 0.01, 0.9, flat, p, exact=False) == (True, "oscillation")
-    falling = [100, 90, 80, 60, 40, 30, 20, 15, 10]
-    assert _rules.decide_stop(9, 10, 0.01, 0.9, falling, p, exact=False) == (False, "running")
-    assert _rules.decide_stop(9, 80, 0.01, 0.2, flat, p, exact=False) == (False, "running")
-    assert _rules.decide_stop(9, 80, 0.01, 0.9, flat, p, exact=False, rule="unstable") == (False, "running")
+def _monitor(n=1000, k=2, **kw):
+    params = _rules.StopParams(window=4, min_iter=4, **kw)
+    return _rules.StateMonitor(n, k, params, exact=False)
+
+
+def _run(mon, steps, labels_at, centers_at):
+    out = None
+    for t in range(steps + 1):
+        mon.push(labels_at(t), centers_at(t))
+        if t:
+            out = mon.assess()
+            if out[0]:
+                return t, out
+    return steps, out
+
+
+def test_monitor_intervenes_on_stable_oscillation():
+    base = np.r_[np.zeros(500, int), np.ones(500, int)]
+    C = np.array([[0.0, 0.0], [10.0, 0.0]])
+
+    def labels(t):          # 20 points (2%) swap clusters every iteration, the rest are fixed
+        lab = base.copy()
+        lab[:20] = t % 2
+        return lab
+
+    t, (stop, regime, state) = _run(_monitor(), 30, labels, lambda t: C)
+    assert stop and regime == "oscillation", state
+    assert state["representatives_stable"] and state["partitions_stable"]
+    assert state["oscillating_share"] == 1.0
+
+
+def test_monitor_waits_while_representatives_move():
+    base = np.r_[np.zeros(500, int), np.ones(500, int)]
+
+    def labels(t):
+        lab = base.copy()
+        lab[:20] = t % 2
+        return lab
+
+    def centers(t):          # center 0 travels a large, quickly shrinking distance
+        return np.array([[3.0 * 0.7 ** t, 0.0], [10.0, 0.0]])
+
+    mon = _monitor()
+    t, (stop, regime, state) = _run(mon, 40, labels, centers)
+    early = [s_ for s_ in mon.trace if "representatives_stable" in s_][:3]
+    assert early and not any(s_["representatives_stable"] for s_ in early)
+    assert all(s_["decision"] == "continue" for s_ in early)
+    if stop:                 # intervention only once the centers have settled
+        assert state["representatives_stable"] and state["center_drift"] <= mon.params.center_tol
+
+
+def test_monitor_waits_while_a_cluster_reorganises():
+    C = np.array([[0.0, 0.0], [10.0, 0.0]])
+
+    def labels(t):           # 15% of cluster 0 keeps flipping: not boundary noise
+        lab = np.r_[np.zeros(500, int), np.ones(500, int)]
+        lab[:75] = t % 2
+        return lab
+
+    t, (stop, regime, state) = _run(_monitor(max_unstable=0.2), 30, labels, lambda t: C)
+    assert not stop and not state["partitions_stable"] and state["cluster_unstable"] > 0.1, state
+
+
+def test_monitor_tail_and_convergence():
+    mon = _rules.StateMonitor(1000, 2, _rules.StopParams(window=4, min_iter=4), exact=True)
+    lab = np.r_[np.zeros(500, int), np.ones(500, int)]
+    C = np.array([[0.0, 0.0], [10.0, 0.0]])
+    mon.push(lab, C)
+    for t in range(1, 3):
+        mon.push(lab, C, changed=0 if t == 2 else 1)
+        stop, regime, _ = mon.assess()
+    assert (stop, regime) == (True, "converged")
+    assert _rules.projected_changes([100, 50, 25, 12], 4, 1000) < 0.02
+    assert _rules.projected_changes([10, 10, 10, 10], 4, 1000) == float("inf")
 
 
 def test_settle_auto_keeps_drifters_and_averages_oscillators():
@@ -150,3 +212,17 @@ def test_auto_detects_persistent_oscillation():
     assert mk.stop_reason_ == "oscillation", (mk.stop_reason_, mk.n_iter_, mk.unstable_fraction_)
     assert mk.regime_ == "oscillation" and mk.oscillating_share_ >= 0.3
     assert mk.n_iter_ < 120
+    last = mk.decision_trace_[-1]
+    assert last["decision"] == "oscillation" and last["representatives_stable"] and last["partitions_stable"]
+
+
+def test_settle_in_oscillation_regime_uses_occupancy_for_every_point():
+    hist = np.array([[0, 0, 0, 0, 0, 1, 1, 1],      # one switch: kept in drift, occupancy here
+                     [0, 1, 0, 1, 0, 1, 0, 1]]).T
+    labels, S, P, osc = _rules.settle(hist, hist[-1], rule="auto", regime="oscillation")
+    from markov_kmeans._markov import to_dense
+    D = to_dense(S, P, 2)
+    np.testing.assert_allclose(D[0], [5 / 8, 3 / 8])
+    assert list(labels) == [0, 1]
+    labels_d, _, _, _ = _rules.settle(hist, hist[-1], rule="auto", regime="drift")
+    assert list(labels_d) == [1, 1]

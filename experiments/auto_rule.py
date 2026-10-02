@@ -69,31 +69,25 @@ def reference(regime, traj, k):
     return occ.argmax(1), occ
 
 
-def replay_stop(traj, params, exact, rule, t0=None):
-    """Same logic as MarkovKMeans.fit, replayed on a recorded trajectory."""
-    H, counts = traj["H"], traj["counts"]
-    W = params.window
-    n = H.shape[1]
-    last_change = np.full(n, -1, dtype=np.int32)
+REASON = lambda regime, state, p: {"converged": "converged", "oscillation": "oscillation",
+                                   "drift": "few_unstable" if state.get("unstable_frac", 1) <= p.unstable_tol
+                                   else "stable_drift"}[regime]
+STATE_KEYS = ("unstable_frac", "center_drift", "cluster_unstable", "size_change", "oscillating_share",
+              "projected_changes")
+
+
+def replay_stop(traj, params, exact, rule, k):
+    """Same StateMonitor as MarkovKMeans.fit, fed with the recorded trajectory."""
+    H, C, counts = traj["H"], traj["C"], traj["counts"]
+    mon = _rules.StateMonitor(H.shape[1], k, params, exact=exact, rule=rule)
+    mon.push(H[0], C[0])
+    state = {}
     for t in range(1, len(H)):
-        changed = int(counts[t - 1])
-        last_change[H[t] != H[t - 1]] = t
-        if t0 is not None:
-            if changed == 0 and exact:
-                return t, "converged", last_change
-            if t >= t0:
-                return t, "t0", last_change
-            continue
-        frac = float((last_change > t - W).mean())
-        osc = None
-        if (rule == "auto" and t >= max(params.min_iter, W) and frac > params.unstable_tol
-                and frac <= params.max_unstable):
-            idx = np.flatnonzero(last_change > t - W)
-            osc = float((_rules.switches(H[max(0, t - W):t + 1][:, idx]) >= 2).mean()) if len(idx) else 0.0
-        stop, regime = _rules.decide_stop(t, changed, frac, osc, list(counts[:t]), params, exact, rule=rule)
+        mon.push(H[t], C[t], int(counts[t - 1]))
+        stop, regime, state = mon.assess()
         if stop:
-            return t, {"converged": "converged", "drift": "few_unstable", "oscillation": "oscillation"}[regime], last_change
-    return len(H) - 1, "max_iter", last_change
+            return t, REASON(regime, state, params), mon.last_change.copy(), state
+    return len(H) - 1, "max_iter", mon.last_change.copy(), state
 
 
 def first_t(cond, T):
@@ -111,7 +105,8 @@ def evaluate(name, regime, traj, X, k, t, reason, last_change, assign, ref, occ,
     soft_tv = float("nan")
     if len(U) and assign != "keep_all":
         Hw = H[max(0, t - W):t + 1][:, U].astype(np.int64)
-        lab_U, S, P, _ = _rules.settle(Hw, L[U], rule=assign)
+        regime_ = "oscillation" if reason == "oscillation" else "drift"
+        lab_U, S, P, _ = _rules.settle(Hw, L[U], rule=assign, regime=regime_)
         labels[U] = lab_U
         if occ is not None:
             soft_tv = float(0.5 * np.abs(to_dense(S, P, k) - occ[U]).sum(1).mean())
@@ -154,7 +149,8 @@ def run_instance(regime, n, d, k, sep, seed, eta, out, check=False):
     full_sse = None
     rows = []
     # 1) the package's automatic rules (and variants of the assignment at the same stop)
-    t, reason, lc = replay_stop(traj, params, exact, "auto")
+    t, reason, lc, state = replay_stop(traj, params, exact, "auto", k)
+    at_stop = {f"state_{key}": state.get(key, "") for key in STATE_KEYS}
     if check:
         mk = MarkovKMeans(k, init=C0, algorithm="hamerly" if exact else "minibatch",
                           learning_rate="constant" if regime == "minibatch_const" else "count",
@@ -162,9 +158,9 @@ def run_instance(regime, n, d, k, sep, seed, eta, out, check=False):
         assert mk.n_iter_ == t and mk.stop_reason_ == reason, (mk.n_iter_, t, mk.stop_reason_, reason)
         print(f"  replay matches MarkovKMeans.fit: stop at {t} ({reason})", flush=True)
     for assign in ("auto", "markov", "frequency", "keep"):
-        rows.append(evaluate(f"auto_stop+{assign}", regime, traj, X, k, t, reason, lc, assign, ref, occ, W))
+        rows.append(evaluate(f"auto_stop+{assign}", regime, traj, X, k, t, reason, lc, assign, ref, occ, W, at_stop))
     # 2) the 0.1.0 default: unstable fraction <= 1e-3 only, Markov assignment
-    t, reason, lc = replay_stop(traj, params, exact, "unstable")
+    t, reason, lc, _ = replay_stop(traj, params, exact, "unstable", k)
     rows.append(evaluate("v0.1.0(unstable_tol)+markov", regime, traj, X, k, t, reason, lc, "markov", ref, occ, W))
     # 3) common stopping rules of other implementations, labels kept as they are
     var = float(np.var(X, axis=0).mean())
