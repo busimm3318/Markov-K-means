@@ -1,0 +1,53 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Test
+        run: python -m pytest -q
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build and check
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*
+      - name: Install the wheel outside the repository and smoke-test it
+        run: |
+          python -m venv /tmp/wheel-env
+          /tmp/wheel-env/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/wheel-env/bin/python -c "
+          import sys, numpy as np
+          from markov_kmeans import MarkovKMeans, assign_from_history
+          X = np.random.default_rng(0).normal(size=(3000, 4))
+          m = MarkovKMeans(5, t0=5, random_state=0).fit(X)
+          assert m.membership_.shape == (3000, 5)
+          assert 'kmeans_accel' not in sys.modules
+          print('ok', m.n_iter_, m.stop_reason_)
+          "

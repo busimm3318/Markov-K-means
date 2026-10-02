@@ -1,0 +1,44 @@
+== Exact Lloyd, k-means++ init, T0=10
+blobs overlap d=16   seed=0 n= 50000 d=  16 k= 50 | iters=  48 | tail passes=  38 (79.2%) | changed after T0=  4491 ( 8.98%) | final!=label@T0= 8.09% | states visited {2: 4215, 3: 269, 4: 7} | median switches=1 | returned to label@T0=0.10
+                       flag = changed in last  3 iters before T0: flagged=  2552 recall=0.10 precision=0.18
+                       flag = changed in last  5 iters before T0: flagged=  5477 recall=0.21 precision=0.17
+                       flag = changed in last 10 iters before T0: flagged= 31575 recall=0.75 precision=0.11
+blobs overlap d=16   seed=1 n= 50000 d=  16 k= 50 | iters=  54 | tail passes=  44 (81.5%) | changed after T0=  7066 (14.13%) | final!=label@T0=12.95% | states visited {2: 6292, 3: 717, 4: 52, 5: 5} | median switches=1 | returned to label@T0=0.08
+                       flag = changed in last  3 iters before T0: flagged=  3873 recall=0.16 precision=0.29
+                       flag = changed in last  5 iters before T0: flagged=  6986 recall=0.26 precision=0.27
+                       flag = changed in last 10 iters before T0: flagged= 32741 recall=0.78 precision=0.17
+blobs separated d=16 seed=0 n= 50000 d=  16 k= 50 | iters=  19 | tail passes=   9 (47.4%) | changed after T0=    56 ( 0.11%) | final!=label@T0= 0.11% | states visited {2: 56} | median switches=1 | returned to label@T0=0.02
+                       flag = changed in last  3 iters before T0: flagged=    69 recall=0.04 precision=0.03
+                       flag = changed in last  5 iters before T0: flagged=   135 recall=0.09 precision=0.04
+                       flag = changed in last 10 iters before T0: flagged=  1478 recall=0.29 precision=0.01
+blobs separated d=16 seed=1 n= 50000 d=  16 k= 50 | iters=  26 | tail passes=  16 (61.5%) | changed after T0=   109 ( 0.22%) | final!=label@T0= 0.20% | states visited {2: 109} | median switches=1 | returned to label@T0=0.06
+                       flag = changed in last  3 iters before T0: flagged=    61 recall=0.06 precision=0.10
+                       flag = changed in last  5 iters before T0: flagged=   103 recall=0.06 precision=0.07
+                       flag = changed in last 10 iters before T0: flagged=  1371 recall=0.21 precision=0.02
+uniform d=8          seed=0 n= 50000 d=   8 k= 50 | iters= 135 | tail passes= 125 (92.6%) | changed after T0= 22525 (45.05%) | final!=label@T0=39.75% | states visited {2: 17517, 3: 4333, 4: 621, 5: 54} | median switches=1 | returned to label@T0=0.12
+                       flag = changed in last  3 iters before T0: flagged=  4957 recall=0.11 precision=0.50
+                       flag = changed in last  5 iters before T0: flagged=  8995 recall=0.20 precision=0.50
+                       flag = changed in last 10 iters before T0: flagged= 25055 recall=0.54 precision=0.49
+uniform d=8          seed=1 n= 50000 d=   8 k= 50 | iters= 212 | tail passes= 202 (95.3%) | changed after T0= 24822 (49.64%) | final!=label@T0=44.00% | states visited {2: 18101, 3: 5720, 4: 917, 5: 80, 6: 4} | median switches=1 | returned to label@T0=0.11
+                       flag = changed in last  3 iters before T0: flagged=  5110 recall=0.11 precision=0.53
+                       flag = changed in last  5 iters before T0: flagged=  8886 recall=0.19 precision=0.54
+                       flag = changed in last 10 iters before T0: flagged= 25041 recall=0.52 precision=0.52
+fashion_mnist 20k    seed=0 n= 20000 d= 784 k= 50 | iters=  84 | tail passes=  74 (88.1%) | changed after T0=  4275 (21.38%) | final!=label@T0=20.47% | states visited {2: 4055, 3: 217, 4: 3} | median switches=1 | returned to label@T0=0.04
+                       flag = changed in last  3 iters before T0: flagged=  1228 recall=0.09 precision=0.30
+                       flag = changed in last  5 iters before T0: flagged=  2258 recall=0.16 precision=0.30
+                       flag = changed in last 10 iters before T0: flagged=  9147 recall=0.51 precision=0.24
+fashion_mnist 20k    seed=1 n= 20000 d= 784 k= 50 | iters=  99 | tail passes=  89 (89.9%) | changed after T0=  3391 (16.96%) | final!=label@T0=16.05% | states visited {2: 3120, 3: 264, 4: 7} | median switches=1 | returned to label@T0=0.05
+                       flag = changed in last  3 iters before T0: flagged=  1193 recall=0.07 precision=0.20
+                       flag = changed in last  5 iters before T0: flagged=  2130 recall=0.13 precision=0.20
+                       flag = changed in last 10 iters before T0: flagged=  8528 recall=0.48 precision=0.19
+birch3               seed=0 n=100000 d=   2 k=100 | iters= 123 | tail passes= 113 (91.9%) | changed after T0= 12050 (12.05%) | final!=label@T0=11.22% | states visited {2: 11077, 3: 962, 4: 11} | median switches=1 | returned to label@T0=0.07
+                       flag = changed in last  3 iters before T0: flagged=  2002 recall=0.04 precision=0.22
+                       flag = changed in last  5 iters before T0: flagged=  3632 recall=0.06 precision=0.20
+                       flag = changed in last 10 iters before T0: flagged= 15745 recall=0.22 precision=0.17
+birch3               seed=1 n=100000 d=   2 k=100 | iters= 164 | tail passes= 154 (93.9%) | changed after T0= 13514 (13.51%) | final!=label@T0=12.84% | states visited {2: 12850, 3: 658, 4: 6} | median switches=1 | returned to label@T0=0.05
+                       flag = changed in last  3 iters before T0: flagged=  1860 recall=0.03 precision=0.23
+                       flag = changed in last  5 iters before T0: flagged=  3382 recall=0.06 precision=0.24
+                       flag = changed in last 10 iters before T0: flagged= 13892 recall=0.25 precision=0.25
+== Mini-batch k-means (batch 1024, label snapshot every 10 batches, first 20 discarded)
+blobs overlap d=16   checkpoints=40 | ever flipping=1594 (3.19%) | flips per checkpoint (median)=54 | switches per flipper median=1 max=10 | ended at first label=0.06 | late max center shift=0.0150
+fashion_mnist 20k    checkpoints=40 | ever flipping=630 (3.15%) | flips per checkpoint (median)=18 | switches per flipper median=1 max=5 | ended at first label=0.02 | late max center shift=0.0177

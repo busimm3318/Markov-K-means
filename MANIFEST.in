@@ -1,0 +1,7 @@
+# The PyPI sdist ships the package only; tests and research code need the full repository.
+prune tests
+prune experiments
+prune benchmarks
+prune kmeans_accel
+prune docs
+prune examples
