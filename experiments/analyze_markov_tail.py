@@ -227,8 +227,15 @@ def predictors(z):
     return out
 
 
+BINS = ((0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0001))
+
+
 def oscillator_report():
-    """Reliability of fractional π: does π(a) match how often the point really ends in a?"""
+    """Reliability of fractional π: does π(a) match how often the point really ends in a?
+
+    Outcome: long-run occupancy of state a (mini-batch regimes) or 1[converged label == a]
+    (exact).  Reported separately for T0 = 10 and for the few-unstable-points regime T0 >= 20.
+    """
     rows = []
     for f in sorted(RESULTS.glob("oscillators_*.npz")):
         z = np.load(f)
@@ -236,23 +243,55 @@ def oscillator_report():
             continue
         regime = f.name[len("oscillators_"):].split("-")[0]
         out = (z["occ_a"] if regime.startswith("minibatch") else (z["ref"] == z["a"]).astype(float))
-        for lo, hi in ((0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)):
+        for subset, sel in (("T0=10", z["T0"] == 10), ("T0>=20", z["T0"] >= 20)):
+            if not sel.any():
+                continue
+            o = out[sel]
             for name, pred in predictors(z):
-                m = (pred >= lo) & (pred < hi) if hi < 1 else (pred >= lo)
-                if m.any():
-                    rows.append(dict(file=f.name, regime=regime, predictor=name, bin=f"[{lo:.1f},{hi:.1f})",
-                                     n=int(m.sum()), mean_pred=float(pred[m].mean()),
-                                     observed=float(out[m].mean())))
-        for name, pred in predictors(z):
-            rows.append(dict(file=f.name, regime=regime, predictor=name, bin="all", n=len(pred),
-                             mean_pred=float(pred.mean()), observed=float(out.mean()),
-                             brier=float(((pred - out) ** 2).mean()),
-                             corr=float(np.corrcoef(pred, out)[0, 1]) if pred.std() > 0 and out.std() > 0 else float("nan")))
+                pr = pred[sel]
+                for lo, hi in BINS:
+                    m = (pr >= lo) & (pr < hi)
+                    if m.any():
+                        rows.append(dict(regime=regime, subset=subset, predictor=name, bin=f"[{lo:.1f},{min(hi, 1):.1f})",
+                                         n=int(m.sum()), mean_pred=float(pr[m].mean()), observed=float(o[m].mean())))
+                rows.append(dict(regime=regime, subset=subset, predictor=name, bin="all", n=int(sel.sum()),
+                                 mean_pred=float(pr.mean()), observed=float(o.mean()),
+                                 brier=float(((pr - o) ** 2).mean()),
+                                 corr=float(np.corrcoef(pr, o)[0, 1]) if pr.std() > 0 and o.std() > 0 else float("nan"),
+                                 frac_outcome_mixed=float(((o > 0.05) & (o < 0.95)).mean()),
+                                 ends_in_label_T0=float((z["ref"][sel] == z["label_T0"][sel]).mean())))
     rep = pd.DataFrame(rows)
     if len(rep):
         TABLES.mkdir(parents=True, exist_ok=True)
         rep.to_csv(TABLES / "oscillator_reliability.csv", index=False)
+        fig5(rep)
     return rep
+
+
+def fig5(rep):
+    regs = [r for r in REGIMES if r in set(rep.regime)]
+    fig, axes = plt.subplots(1, len(regs), figsize=(5.4 * len(regs), 4.8), squeeze=False)
+    names = {"markov_pi": "Markov π (proposed)", "frequency": "label frequency",
+             "plugin_posterior_T0": "plug-in GMM posterior at T0", "model_posterior_oracle": "converged-model posterior (oracle)"}
+    for ax, reg in zip(axes[0], regs):
+        d = rep[(rep.regime == reg) & (rep.subset == "T0>=20") & (rep.bin != "all")]
+        ax.plot([0.5, 1], [0.5, 1], color=GRID, lw=1.5, zorder=0)
+        for i, pname in enumerate(["markov_pi", "frequency", "plugin_posterior_T0", "model_posterior_oracle"]):
+            q = d[d.predictor == pname]
+            if q.empty:
+                continue
+            size = 30 + 400 * np.sqrt(q.n / q.n.max())   # marker area grows with the bin's point count
+            ax.scatter(q.mean_pred, q.observed, s=size, color=SERIES[i], marker=MARKERS[i],
+                       edgecolor=SURFACE, linewidth=1.5, label=names[pname], alpha=0.9)
+        n = int(rep[(rep.regime == reg) & (rep.subset == "T0>=20") & (rep.bin == "all")].n.max() or 0)
+        _style(ax, f"{RNAME[reg]} (T0 ≥ 20, {n} points)", "observed share ending in a", "predicted probability of state a")
+        ax.set_ylim(-0.02, 1.05)
+        ax.set_xlim(0.47, 1.0)
+        leg = ax.legend(frameon=False, fontsize=8, labelcolor=INK2, loc="upper center", bbox_to_anchor=(0.5, -0.2),
+                        ncol=2, markerscale=0.5)
+    fig.tight_layout()
+    fig.savefig(FIG / "fig5_fractional_reliability.png", dpi=150)
+    plt.close(fig)
 
 
 def main():
