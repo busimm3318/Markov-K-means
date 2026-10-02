@@ -3,8 +3,8 @@ name: publish
 # Releases use PyPI Trusted Publishing (OpenID Connect): no API token is stored in the
 # repository. Register this repository/workflow/environment as a trusted publisher on
 # PyPI (environment "pypi") and TestPyPI (environment "testpypi") once.
-#   - publish a GitHub Release whose tag vX.Y.Z matches markov_kmeans.__version__ -> PyPI
-#     (Releases -> Draft a new release -> create tag vX.Y.Z -> Publish release)
+#   - publish a GitHub Release whose tag vX.Y.Z (or X.Y.Z) matches markov_kmeans.__version__
+#     -> PyPI (Releases -> Draft a new release -> create tag vX.Y.Z -> Publish release)
 #   - run the workflow manually with target=testpypi -> TestPyPI (dry run)
 
 on:
@@ -31,7 +31,7 @@ jobs:
         if: github.event_name == 'release'
         run: |
           v=$(python -c "import re; print(re.search(r'__version__ = \"(.+?)\"', open('markov_kmeans/__init__.py').read()).group(1))")
-          if [ "v$v" != "$GITHUB_REF_NAME" ]; then echo "tag $GITHUB_REF_NAME does not match version $v"; exit 1; fi
+          if [ "v$v" != "$GITHUB_REF_NAME" ] && [ "$v" != "$GITHUB_REF_NAME" ]; then echo "tag $GITHUB_REF_NAME does not match version $v"; exit 1; fi
       - name: Build and check
         run: |
           python -m pip install --upgrade pip build twine
