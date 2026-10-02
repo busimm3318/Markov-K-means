@@ -34,6 +34,27 @@ def blobs(n, d, k_true, sep=4.0, seed=0):
     return np.ascontiguousarray(means[comp] + rng.normal(size=(n, d)))
 
 
+def gmm(n, d, k_true, sep=4.0, seed=0, dtype=np.float64):
+    """Same mixture as :func:`blobs` but also returns the true components and means.
+
+    Returns ``(X, z, means)``; with ``dtype=np.float64`` ``X`` is identical to
+    ``blobs(n, d, k_true, sep, seed)``.  Generation is chunked so very large n fits.
+    """
+    rng = np.random.default_rng(seed)
+    means = rng.normal(scale=sep, size=(k_true, d))
+    z = rng.integers(k_true, size=n)
+    X = np.empty((n, d), dtype=dtype)
+    step = 1 << 20
+    if n <= step:
+        X[:] = means[z] + rng.normal(size=(n, d))
+    else:
+        noise_rng = np.random.default_rng([seed, 1])
+        for s in range(0, n, step):
+            e = min(n, s + step)
+            X[s:e] = means[z[s:e]] + noise_rng.normal(size=(e - s, d))
+    return X, z, means
+
+
 def uniform(n, d, seed=0):
     """Unclustered data: the hard case for every pruning method."""
     return np.random.default_rng(seed).random((n, d))
