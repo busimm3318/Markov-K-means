@@ -1,6 +1,6 @@
 """Figures for the README: how the method works, and where the time of a run goes.
 
-    python -m experiments.readme_figures          # docs/figures/readme_*.png (+ experiments/results/readme_tail.csv)
+    python -m experiments.readme_figures          # docs/figures/readme_*.png, social_preview.png (+ experiments/results/readme_tail.csv)
     python -m experiments.readme_figures --plot   # redraw from the saved CSV
 """
 from __future__ import annotations
@@ -178,11 +178,30 @@ def tail_figure(df):
     plt.close(fig)
 
 
+def social_preview():
+    """1280 x 640 card for the repository's social preview (Settings > General > Social preview)."""
+    import matplotlib.image as mpimg
+
+    fig = plt.figure(figsize=(12.8, 6.4), dpi=100, facecolor=SURFACE)
+    fig.text(0.045, 0.88, "Markov-K-means", fontsize=46, fontweight="bold", color=INK, va="center")
+    fig.text(0.045, 0.765, "Stop K-means when only boundary points still switch clusters,", fontsize=21, color=INK2,
+             va="center")
+    fig.text(0.045, 0.705, "and settle them from their own label history.", fontsize=21, color=INK2, va="center")
+    fig.text(0.955, 0.88, "pip install markov-kmeans", fontsize=17, color=BLUE, ha="right", va="center",
+             family="DejaVu Sans Mono")
+    ax = fig.add_axes([0.03, 0.03, 0.94, 0.6])
+    ax.imshow(mpimg.imread(FIG / "readme_settle.png"))
+    ax.axis("off")
+    fig.savefig(FIG / "social_preview.png", dpi=100, facecolor=SURFACE)
+    plt.close(fig)
+
+
 def main(argv=()):
     plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
     FIG.mkdir(parents=True, exist_ok=True)
     mechanism()
     settle_figure()
+    social_preview()
     df = pd.read_csv(RESULTS / "readme_tail.csv") if "--plot" in argv else tail_data()
     tail_figure(df)
 
