@@ -134,13 +134,14 @@ r.labels, r.dense(n_clusters), r.uncertainty
 | `min_iter`, `max_iter` | 10, 300 | iteration bounds |
 | `center_update` | `"auto"` | final centers: `"hard"`, `"soft"` (membership-weighted), `"none"` |
 
-The monitor's other thresholds are documented in the docstring; the evaluation used their defaults. `assign_rule="markov"` settles every undecided point by the long-run law of its label Markov chain. Diagnostics include `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_` and `labels_at_stop_`. `predict`, `transform`, `fit_predict` and `score` follow scikit-learn.
+The monitor's other thresholds are documented in the docstring; the evaluation used their defaults. `assign_rule="markov"` settles every undecided point by the long-run law of its label Markov chain. Diagnostics include `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_` and `labels_at_stop_`. `MarkovKMeans` is a scikit-learn estimator: it passes scikit-learn's `check_estimator` and works with `clone`, `Pipeline`, `GridSearchCV` and `set_output`.
 
 ### Further reading
 
 - [Evaluation report](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md): methods, every number behind the figures, colour quantization and VQ codebook studies
 - [Prior work](https://github.com/busimm3318/Markov-K-means/blob/main/docs/literature_review.md)
 - [Quick start](https://github.com/busimm3318/Markov-K-means/blob/main/examples/quickstart.py)
+- Citing: [CITATION.cff](https://github.com/busimm3318/Markov-K-means/blob/main/CITATION.cff), or "Cite this repository" on the GitHub page
 
 ---
 
@@ -257,13 +258,14 @@ r.labels, r.dense(n_clusters), r.uncertainty
 | `min_iter`, `max_iter` | 10, 300 | 반복 수 범위 |
 | `center_update` | `"auto"` | 최종 대표점: `"hard"`, `"soft"`(소속도 가중), `"none"` |
 
-감시기의 나머지 임계값은 docstring에 정리되어 있고, 평가는 모두 기본값으로 했다. `assign_rule="markov"`는 모든 미결정 점을 라벨 Markov 연쇄의 장기 분포로 정리한다. 진단 속성으로 `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_`, `labels_at_stop_`이 있다. `predict`, `transform`, `fit_predict`, `score`는 scikit-learn과 같다.
+감시기의 나머지 임계값은 docstring에 정리되어 있고, 평가는 모두 기본값으로 했다. `assign_rule="markov"`는 모든 미결정 점을 라벨 Markov 연쇄의 장기 분포로 정리한다. 진단 속성으로 `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_`, `labels_at_stop_`이 있다. `MarkovKMeans`는 scikit-learn 추정기다. scikit-learn의 `check_estimator`를 통과하고 `clone`, `Pipeline`, `GridSearchCV`, `set_output`과 함께 쓸 수 있다.
 
 ### 더 보기
 
 - [평가 보고서](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md): 방법, 그림 뒤의 모든 수치, 색 양자화·VQ 코드북 실험
 - [선행연구](https://github.com/busimm3318/Markov-K-means/blob/main/docs/literature_review.md)
 - [빠른 시작 예제](https://github.com/busimm3318/Markov-K-means/blob/main/examples/quickstart.py)
+- 인용: [CITATION.cff](https://github.com/busimm3318/Markov-K-means/blob/main/CITATION.cff) 또는 GitHub 페이지의 "Cite this repository"
 
 ---
 

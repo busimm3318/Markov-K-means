@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0
+
+Development status is now **Beta**: parameter names, defaults and fitted attributes are
+kept stable; any change to them goes through a deprecation warning first.
+
+### Added
+* `MarkovKMeans` is a scikit-learn estimator (clusterer and transformer). It passes
+  `sklearn.utils.estimator_checks.check_estimator` for scikit-learn 1.3 to 1.9 and works
+  with `clone`, `Pipeline`, `GridSearchCV` and `set_output(transform="pandas")`.
+  * Input is validated by scikit-learn: NaN, infinite, sparse, complex and empty inputs
+    raise clear errors; `n_features_in_` and `feature_names_in_` are recorded, and
+    `predict`, `transform` and `score` check them.
+  * `get_feature_names_out` names the distance columns `markovkmeans0`, `markovkmeans1`, ….
+  * `random_state` also accepts a `RandomState` instance; integer seeds give the same
+    results as before.
+* `CITATION.cff`: GitHub shows "Cite this repository".
+
+### Changed
+* Calling `predict`, `transform` or `score` before `fit` raises scikit-learn's
+  `NotFittedError` (a subclass of `ValueError` and `AttributeError`) instead of
+  `RuntimeError`.
+* `n_clusters` larger than the number of samples raises
+  `ValueError("n_samples=... should be >= n_clusters=...")`.
+* `repr` follows scikit-learn: it shows the parameters that differ from their defaults.
+
 ## 0.2.0
 
 ### Added

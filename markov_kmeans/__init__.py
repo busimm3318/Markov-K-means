@@ -16,4 +16,4 @@ from .assign import HistoryAssignment, assign_from_history
 from .estimator import MarkovKMeans
 
 __all__ = ["MarkovKMeans", "assign_from_history", "HistoryAssignment"]
-__version__ = "0.2.0"
+__version__ = "0.3.0"
