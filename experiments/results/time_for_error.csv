@@ -1,0 +1,951 @@
+family,param,T,cost,error,regime,instance
+fixed iterations,2.0,2,0.16943290272512618,0.055466,exact,exact-sep1.5-s0
+markov-kmeans (t0),2.0,2,0.19466013795474477,0.055466,exact,exact-sep1.5-s0
+fixed iterations,3.0,3,0.25732452269742545,0.035644,exact,exact-sep1.5-s0
+markov-kmeans (t0),3.0,3,0.282420002805092,0.041389,exact,exact-sep1.5-s0
+fixed iterations,5.0,5,0.4058976006335077,0.012091,exact,exact-sep1.5-s0
+markov-kmeans (t0),5.0,5,0.4417573684643676,0.019805,exact,exact-sep1.5-s0
+fixed iterations,7.0,7,0.43842342737912454,0.010044,exact,exact-sep1.5-s0
+markov-kmeans (t0),7.0,7,0.46670896294640773,0.011943,exact,exact-sep1.5-s0
+fixed iterations,10.0,10,0.4524379974223819,0.009334,exact,exact-sep1.5-s0
+markov-kmeans (t0),10.0,10,0.4913655511912556,0.0097,exact,exact-sep1.5-s0
+fixed iterations,13.0,13,0.4668527169421115,0.008766,exact,exact-sep1.5-s0
+markov-kmeans (t0),13.0,13,0.4759143373827541,0.008836,exact,exact-sep1.5-s0
+fixed iterations,16.0,16,0.48075979272110253,0.008306,exact,exact-sep1.5-s0
+markov-kmeans (t0),16.0,16,0.48841163058032866,0.008316,exact,exact-sep1.5-s0
+fixed iterations,20.0,20,0.4984090144447707,0.007777,exact,exact-sep1.5-s0
+markov-kmeans (t0),20.0,20,0.5063550054240634,0.007787,exact,exact-sep1.5-s0
+fixed iterations,25.0,25,0.5197059702290382,0.007127,exact,exact-sep1.5-s0
+markov-kmeans (t0),25.0,25,0.5280819103499621,0.007138,exact,exact-sep1.5-s0
+fixed iterations,30.0,30,0.5431972694585356,0.006469,exact,exact-sep1.5-s0
+markov-kmeans (t0),30.0,30,0.5519965748298455,0.00647,exact,exact-sep1.5-s0
+fixed iterations,40.0,40,0.591551330168618,0.004963,exact,exact-sep1.5-s0
+markov-kmeans (t0),40.0,40,0.6012242342785588,0.004963,exact,exact-sep1.5-s0
+fixed iterations,50.0,50,0.6406746816340435,0.003418,exact,exact-sep1.5-s0
+markov-kmeans (t0),50.0,50,0.6512344304626214,0.003419,exact,exact-sep1.5-s0
+fixed iterations,60.0,60,0.6868194258225357,0.002343,exact,exact-sep1.5-s0
+markov-kmeans (t0),60.0,60,0.698214083985724,0.002345,exact,exact-sep1.5-s0
+fixed iterations,70.0,70,0.7354443877077205,0.001737,exact,exact-sep1.5-s0
+markov-kmeans (t0),70.0,70,0.747692560634391,0.001741,exact,exact-sep1.5-s0
+fixed iterations,80.0,80,0.7769599756827713,0.001024,exact,exact-sep1.5-s0
+markov-kmeans (t0),80.0,80,0.7900939973242745,0.001025,exact,exact-sep1.5-s0
+fixed iterations,100.0,100,0.8503781315722109,0.000373,exact,exact-sep1.5-s0
+markov-kmeans (t0),100.0,100,0.8651753854401361,0.000374,exact,exact-sep1.5-s0
+fixed iterations,120.0,120,0.9178323414772248,0.000192,exact,exact-sep1.5-s0
+markov-kmeans (t0),120.0,120,0.9343191577333003,0.000193,exact,exact-sep1.5-s0
+fixed iterations,140.0,140,0.9848528613757805,1.5e-05,exact,exact-sep1.5-s0
+markov-kmeans (t0),140.0,140,1.0030389852777308,1.5e-05,exact,exact-sep1.5-s0
+fixed iterations,160.0,145,1.0,0.0,exact,exact-sep1.5-s0
+markov-kmeans (t0),160.0,145,1.0185813575985847,0.0,exact,exact-sep1.5-s0
+fixed iterations,180.0,145,1.0,0.0,exact,exact-sep1.5-s0
+markov-kmeans (t0),180.0,145,1.018586881697399,0.0,exact,exact-sep1.5-s0
+fixed iterations,200.0,145,1.0,0.0,exact,exact-sep1.5-s0
+markov-kmeans (t0),200.0,145,1.0187347270234535,0.0,exact,exact-sep1.5-s0
+fixed iterations,230.0,145,1.0,0.0,exact,exact-sep1.5-s0
+markov-kmeans (t0),230.0,145,1.018577410205624,0.0,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.03,14,0.475472182391819,0.008614,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.01693383995333567,14,0.4753008041497063,0.008614,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.009558497852172911,15,0.4804801607541343,0.008464,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.005395402427433293,15,0.47991673014401276,0.008464,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.003045496039666474,17,0.4895448592604278,0.008176,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.0017190647504743226,24,0.5207196554900952,0.007277,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.001,66,0.7287717189849331,0.001986,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.000970345578465104,67,0.7339846197238475,0.001927,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.0005477225575051662,89,0.8361354966227676,0.000588,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.0003091682042541392,90,0.8405872907674735,0.000562,exact,exact-sep1.5-s0
+markov-kmeans (auto),0.00017451349631665946,94,0.8574620128283421,0.000487,exact,exact-sep1.5-s0
+markov-kmeans (auto),9.850612054411147e-05,102,0.8923913074914164,0.00035,exact,exact-sep1.5-s0
+markov-kmeans (auto),5.560289599059913e-05,103,0.8983977695993242,0.000342,exact,exact-sep1.5-s0
+markov-kmeans (auto),3.1385684721559236e-05,136,1.032080726818653,2.6e-05,exact,exact-sep1.5-s0
+markov-kmeans (auto),1.7716005396691216e-05,137,1.0337982961851924,2.3e-05,exact,exact-sep1.5-s0
+markov-kmeans (auto),1e-05,138,1.045444644777218,2.2e-05,exact,exact-sep1.5-s0
+sklearn tol,0.1,7,0.43842342737912454,0.010044,exact,exact-sep1.5-s0
+sklearn tol,0.03162277660168379,7,0.43842342737912454,0.010044,exact,exact-sep1.5-s0
+sklearn tol,0.01,7,0.43842342737912454,0.010044,exact,exact-sep1.5-s0
+sklearn tol,0.0031622776601683794,8,0.4430825915845764,0.009754,exact,exact-sep1.5-s0
+sklearn tol,0.001,8,0.4430825915845764,0.009754,exact,exact-sep1.5-s0
+sklearn tol,0.00031622776601683794,15,0.47613395681990744,0.008442,exact,exact-sep1.5-s0
+sklearn tol,0.0001,60,0.6868194258225357,0.002343,exact,exact-sep1.5-s0
+sklearn tol,3.1622776601683795e-05,85,0.7969703288591159,0.000721,exact,exact-sep1.5-s0
+sklearn tol,9.999999999999999e-06,91,0.8193076176597759,0.000541,exact,exact-sep1.5-s0
+sklearn tol,3.162277660168379e-06,99,0.8471770011991376,0.000384,exact,exact-sep1.5-s0
+sklearn tol,1e-06,107,0.8732316928445468,0.000308,exact,exact-sep1.5-s0
+sklearn tol,3.162277660168379e-07,138,0.9789714342164828,2.2e-05,exact,exact-sep1.5-s0
+sklearn tol,1e-07,139,0.981869959695883,2e-05,exact,exact-sep1.5-s0
+sklearn tol,3.162277660168379e-08,145,1.0,0.0,exact,exact-sep1.5-s0
+sklearn tol,1e-08,145,1.0,0.0,exact,exact-sep1.5-s0
+sklearn tol,3.1622776601683795e-09,145,1.0,0.0,exact,exact-sep1.5-s0
+sklearn tol,1e-09,145,1.0,0.0,exact,exact-sep1.5-s0
+Perez-Ortega,0.1,2,0.16943290272512618,0.055466,exact,exact-sep1.5-s0
+Perez-Ortega,0.046415888336127795,2,0.16943290272512618,0.055466,exact,exact-sep1.5-s0
+Perez-Ortega,0.03,3,0.25732452269742545,0.035644,exact,exact-sep1.5-s0
+Perez-Ortega,0.021544346900318843,4,0.3215282772300308,0.018415,exact,exact-sep1.5-s0
+Perez-Ortega,0.01,5,0.4058976006335077,0.012091,exact,exact-sep1.5-s0
+Perez-Ortega,0.004641588833612782,6,0.4311598279260443,0.010533,exact,exact-sep1.5-s0
+Perez-Ortega,0.0021544346900318843,6,0.4311598279260443,0.010533,exact,exact-sep1.5-s0
+Perez-Ortega,0.001,7,0.43842342737912454,0.010044,exact,exact-sep1.5-s0
+Perez-Ortega,0.0004641588833612782,8,0.4430825915845764,0.009754,exact,exact-sep1.5-s0
+Perez-Ortega,0.00021544346900318845,15,0.47613395681990744,0.008442,exact,exact-sep1.5-s0
+Perez-Ortega,0.0001,60,0.6868194258225357,0.002343,exact,exact-sep1.5-s0
+Perez-Ortega,4.641588833612782e-05,87,0.8045906000321102,0.000646,exact,exact-sep1.5-s0
+Perez-Ortega,2.1544346900318867e-05,94,0.8297501880531922,0.000487,exact,exact-sep1.5-s0
+Perez-Ortega,9.999999999999999e-06,99,0.8471770011991376,0.000384,exact,exact-sep1.5-s0
+Perez-Ortega,4.641588833612782e-06,136,0.9729302425549529,2.6e-05,exact,exact-sep1.5-s0
+Perez-Ortega,2.1544346900318865e-06,138,0.9789714342164828,2.2e-05,exact,exact-sep1.5-s0
+Perez-Ortega,1e-06,145,1.0,0.0,exact,exact-sep1.5-s0
+full run,0.0,145,1.0,0.0,exact,exact-sep1.5-s0
+fixed iterations,2.0,2,0.2254020533785368,0.135213,exact,exact-sep1.5-s1
+markov-kmeans (t0),2.0,2,0.23455632305328816,0.135213,exact,exact-sep1.5-s1
+fixed iterations,3.0,3,0.24758089018633928,0.114074,exact,exact-sep1.5-s1
+markov-kmeans (t0),3.0,3,0.25734579090493764,0.120135,exact,exact-sep1.5-s1
+fixed iterations,5.0,5,0.29920015945538786,0.080544,exact,exact-sep1.5-s1
+markov-kmeans (t0),5.0,5,0.31405986013517384,0.096364,exact,exact-sep1.5-s1
+fixed iterations,7.0,7,0.34689111894106844,0.060259,exact,exact-sep1.5-s1
+markov-kmeans (t0),7.0,7,0.36767809834900755,0.075521,exact,exact-sep1.5-s1
+fixed iterations,10.0,10,0.3862642779172311,0.048032,exact,exact-sep1.5-s1
+markov-kmeans (t0),10.0,10,0.4180106089891897,0.058948,exact,exact-sep1.5-s1
+fixed iterations,13.0,13,0.4451128251634129,0.026861,exact,exact-sep1.5-s1
+markov-kmeans (t0),13.0,13,0.450446966270552,0.033936,exact,exact-sep1.5-s1
+fixed iterations,16.0,16,0.4628361267612742,0.02368,exact,exact-sep1.5-s1
+markov-kmeans (t0),16.0,16,0.4659182421707332,0.024433,exact,exact-sep1.5-s1
+fixed iterations,20.0,20,0.47679388947658186,0.022056,exact,exact-sep1.5-s1
+markov-kmeans (t0),20.0,20,0.47951250365203185,0.022071,exact,exact-sep1.5-s1
+fixed iterations,25.0,25,0.4920636124559081,0.020416,exact,exact-sep1.5-s1
+markov-kmeans (t0),25.0,25,0.4943633602858857,0.020412,exact,exact-sep1.5-s1
+fixed iterations,30.0,30,0.507368049538151,0.018957,exact,exact-sep1.5-s1
+markov-kmeans (t0),30.0,30,0.5098853099004899,0.01896,exact,exact-sep1.5-s1
+fixed iterations,40.0,40,0.534823152807213,0.01673,exact,exact-sep1.5-s1
+markov-kmeans (t0),40.0,40,0.5378138280628165,0.016728,exact,exact-sep1.5-s1
+fixed iterations,50.0,50,0.5607923899374682,0.0147,exact,exact-sep1.5-s1
+markov-kmeans (t0),50.0,50,0.5642570397598098,0.014707,exact,exact-sep1.5-s1
+fixed iterations,60.0,60,0.586481322673199,0.013239,exact,exact-sep1.5-s1
+markov-kmeans (t0),60.0,60,0.5903854315915394,0.01324,exact,exact-sep1.5-s1
+fixed iterations,70.0,70,0.6143780984474456,0.011994,exact,exact-sep1.5-s1
+markov-kmeans (t0),70.0,70,0.6187409732552315,0.011999,exact,exact-sep1.5-s1
+fixed iterations,80.0,80,0.6416812149732338,0.010707,exact,exact-sep1.5-s1
+markov-kmeans (t0),80.0,80,0.6465197730917225,0.010703,exact,exact-sep1.5-s1
+fixed iterations,100.0,100,0.6895276157057637,0.008485,exact,exact-sep1.5-s1
+markov-kmeans (t0),100.0,100,0.6953171538024968,0.008486,exact,exact-sep1.5-s1
+fixed iterations,120.0,120,0.7321856750706701,0.006637,exact,exact-sep1.5-s1
+markov-kmeans (t0),120.0,120,0.7389308338938524,0.006635,exact,exact-sep1.5-s1
+fixed iterations,140.0,140,0.7846968185647774,0.004534,exact,exact-sep1.5-s1
+markov-kmeans (t0),140.0,140,0.7923687339112526,0.004535,exact,exact-sep1.5-s1
+fixed iterations,160.0,160,0.8347176665290871,0.002994,exact,exact-sep1.5-s1
+markov-kmeans (t0),160.0,160,0.8433013712348809,0.002993,exact,exact-sep1.5-s1
+fixed iterations,180.0,180,0.8828514225434085,0.001699,exact,exact-sep1.5-s1
+markov-kmeans (t0),180.0,180,0.8923804305958084,0.001698,exact,exact-sep1.5-s1
+fixed iterations,200.0,200,0.9277784879617684,0.000904,exact,exact-sep1.5-s1
+markov-kmeans (t0),200.0,200,0.9382494654949542,0.000906,exact,exact-sep1.5-s1
+fixed iterations,230.0,230,0.9898857084615441,5.1e-05,exact,exact-sep1.5-s1
+markov-kmeans (t0),230.0,230,1.0017304466246113,5.2e-05,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.03,20,0.4810477323426678,0.022071,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.01693383995333567,22,0.48682103071365146,0.021411,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.009558497852172911,23,0.49089259447912703,0.021082,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.005395402427433293,25,0.497061822014786,0.020412,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.003045496039666474,47,0.5596398024264365,0.015222,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.0017190647504743226,88,0.6712737722532718,0.009689,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.001,149,0.8383530638478087,0.003944,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.000970345578465104,150,0.8466236779612362,0.003899,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.0005477225575051662,188,0.9518109678069328,0.001324,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.0003091682042541392,214,1.0228786776341048,0.000367,exact,exact-sep1.5-s1
+markov-kmeans (auto),0.00017451349631665946,215,1.0225720012916144,0.000354,exact,exact-sep1.5-s1
+markov-kmeans (auto),9.850612054411147e-05,216,1.0297400981026708,0.000346,exact,exact-sep1.5-s1
+markov-kmeans (auto),5.560289599059913e-05,216,1.0321088694233822,0.000346,exact,exact-sep1.5-s1
+markov-kmeans (auto),3.1385684721559236e-05,217,1.035594308646885,0.000339,exact,exact-sep1.5-s1
+markov-kmeans (auto),1.7716005396691216e-05,236,1.0672424717522364,0.0,exact,exact-sep1.5-s1
+markov-kmeans (auto),1e-05,236,1.0676287820786756,0.0,exact,exact-sep1.5-s1
+sklearn tol,0.1,9,0.37043427461322087,0.052998,exact,exact-sep1.5-s1
+sklearn tol,0.03162277660168379,14,0.45280673010580524,0.025099,exact,exact-sep1.5-s1
+sklearn tol,0.01,15,0.4588546992000304,0.024255,exact,exact-sep1.5-s1
+sklearn tol,0.0031622776601683794,16,0.4628361267612742,0.02368,exact,exact-sep1.5-s1
+sklearn tol,0.001,17,0.467296082210774,0.023221,exact,exact-sep1.5-s1
+sklearn tol,0.00031622776601683794,36,0.5244049369250302,0.017506,exact,exact-sep1.5-s1
+sklearn tol,0.0001,87,0.6587143090880351,0.009777,exact,exact-sep1.5-s1
+sklearn tol,3.1622776601683795e-05,169,0.855735402384384,0.002378,exact,exact-sep1.5-s1
+sklearn tol,9.999999999999999e-06,189,0.9033681952206425,0.001286,exact,exact-sep1.5-s1
+sklearn tol,3.162277660168379e-06,217,0.9648543916008888,0.000339,exact,exact-sep1.5-s1
+sklearn tol,1e-06,236,1.0,0.0,exact,exact-sep1.5-s1
+sklearn tol,3.162277660168379e-07,236,1.0,0.0,exact,exact-sep1.5-s1
+sklearn tol,1e-07,236,1.0,0.0,exact,exact-sep1.5-s1
+sklearn tol,3.162277660168379e-08,236,1.0,0.0,exact,exact-sep1.5-s1
+sklearn tol,1e-08,236,1.0,0.0,exact,exact-sep1.5-s1
+sklearn tol,3.1622776601683795e-09,236,1.0,0.0,exact,exact-sep1.5-s1
+sklearn tol,1e-09,236,1.0,0.0,exact,exact-sep1.5-s1
+Perez-Ortega,0.1,2,0.2254020533785368,0.135213,exact,exact-sep1.5-s1
+Perez-Ortega,0.046415888336127795,3,0.24758089018633928,0.114074,exact,exact-sep1.5-s1
+Perez-Ortega,0.03,4,0.2744519392534858,0.098967,exact,exact-sep1.5-s1
+Perez-Ortega,0.021544346900318843,6,0.33118362674520146,0.067083,exact,exact-sep1.5-s1
+Perez-Ortega,0.01,7,0.34689111894106844,0.060259,exact,exact-sep1.5-s1
+Perez-Ortega,0.004641588833612782,13,0.4451128251634129,0.026861,exact,exact-sep1.5-s1
+Perez-Ortega,0.0021544346900318843,14,0.45280673010580524,0.025099,exact,exact-sep1.5-s1
+Perez-Ortega,0.001,16,0.4628361267612742,0.02368,exact,exact-sep1.5-s1
+Perez-Ortega,0.0004641588833612782,21,0.4799891751300258,0.02173,exact,exact-sep1.5-s1
+Perez-Ortega,0.00021544346900318845,51,0.5631470376864748,0.014534,exact,exact-sep1.5-s1
+Perez-Ortega,0.0001,114,0.7192272846314851,0.007102,exact,exact-sep1.5-s1
+Perez-Ortega,4.641588833612782e-05,185,0.895025892885809,0.001426,exact,exact-sep1.5-s1
+Perez-Ortega,2.1544346900318867e-05,214,0.9596126708886915,0.000368,exact,exact-sep1.5-s1
+Perez-Ortega,9.999999999999999e-06,216,0.9631734389457933,0.000346,exact,exact-sep1.5-s1
+Perez-Ortega,4.641588833612782e-06,236,1.0,0.0,exact,exact-sep1.5-s1
+Perez-Ortega,2.1544346900318865e-06,236,1.0,0.0,exact,exact-sep1.5-s1
+Perez-Ortega,1e-06,236,1.0,0.0,exact,exact-sep1.5-s1
+full run,0.0,236,1.0,0.0,exact,exact-sep1.5-s1
+fixed iterations,2.0,2,0.092037426099266,0.054701,exact,exact-sep2.0-s0
+markov-kmeans (t0),2.0,2,0.0946729303638611,0.054701,exact,exact-sep2.0-s0
+fixed iterations,3.0,3,0.11704238474050448,0.043499,exact,exact-sep2.0-s0
+markov-kmeans (t0),3.0,3,0.12021238444694003,0.04644,exact,exact-sep2.0-s0
+fixed iterations,5.0,5,0.19921334180377245,0.014785,exact,exact-sep2.0-s0
+markov-kmeans (t0),5.0,5,0.20416664805038937,0.023159,exact,exact-sep2.0-s0
+fixed iterations,7.0,7,0.2480673705364938,0.011681,exact,exact-sep2.0-s0
+markov-kmeans (t0),7.0,7,0.2538500842195078,0.015028,exact,exact-sep2.0-s0
+fixed iterations,10.0,10,0.2613325387451373,0.010814,exact,exact-sep2.0-s0
+markov-kmeans (t0),10.0,10,0.2683760303291396,0.011069,exact,exact-sep2.0-s0
+fixed iterations,13.0,13,0.27472775117989406,0.01025,exact,exact-sep2.0-s0
+markov-kmeans (t0),13.0,13,0.2781934374080021,0.010277,exact,exact-sep2.0-s0
+fixed iterations,16.0,16,0.2878291803225467,0.009741,exact,exact-sep2.0-s0
+markov-kmeans (t0),16.0,16,0.2900628338508174,0.009744,exact,exact-sep2.0-s0
+fixed iterations,20.0,20,0.30512599781831967,0.009233,exact,exact-sep2.0-s0
+markov-kmeans (t0),20.0,20,0.3076242727398091,0.009233,exact,exact-sep2.0-s0
+fixed iterations,25.0,25,0.32508130691690856,0.008582,exact,exact-sep2.0-s0
+markov-kmeans (t0),25.0,25,0.3279810686566148,0.008596,exact,exact-sep2.0-s0
+fixed iterations,30.0,30,0.34504395527820314,0.007885,exact,exact-sep2.0-s0
+markov-kmeans (t0),30.0,30,0.3483298751553535,0.007892,exact,exact-sep2.0-s0
+fixed iterations,40.0,40,0.3846000021841179,0.006853,exact,exact-sep2.0-s0
+markov-kmeans (t0),40.0,40,0.38877608758426924,0.006853,exact,exact-sep2.0-s0
+fixed iterations,50.0,50,0.4235754004679635,0.006182,exact,exact-sep2.0-s0
+markov-kmeans (t0),50.0,50,0.428536895346033,0.006184,exact,exact-sep2.0-s0
+fixed iterations,60.0,60,0.4626131401302394,0.005608,exact,exact-sep2.0-s0
+markov-kmeans (t0),60.0,60,0.4683856661357806,0.00561,exact,exact-sep2.0-s0
+fixed iterations,70.0,70,0.504305055398135,0.00491,exact,exact-sep2.0-s0
+markov-kmeans (t0),70.0,70,0.5108746633287994,0.004906,exact,exact-sep2.0-s0
+fixed iterations,80.0,80,0.539976040158171,0.004483,exact,exact-sep2.0-s0
+markov-kmeans (t0),80.0,80,0.547347542557125,0.004484,exact,exact-sep2.0-s0
+fixed iterations,100.0,100,0.6129061669174654,0.00328,exact,exact-sep2.0-s0
+markov-kmeans (t0),100.0,100,0.6219114164694123,0.003285,exact,exact-sep2.0-s0
+fixed iterations,120.0,120,0.6852849638056856,0.001652,exact,exact-sep2.0-s0
+markov-kmeans (t0),120.0,120,0.6959205067395158,0.001656,exact,exact-sep2.0-s0
+fixed iterations,140.0,140,0.7552472435194205,0.000765,exact,exact-sep2.0-s0
+markov-kmeans (t0),140.0,140,0.7674371864626703,0.000765,exact,exact-sep2.0-s0
+fixed iterations,160.0,160,0.816939915966087,0.000577,exact,exact-sep2.0-s0
+markov-kmeans (t0),160.0,160,0.8307322944873594,0.000577,exact,exact-sep2.0-s0
+fixed iterations,180.0,180,0.8841448544958401,0.000277,exact,exact-sep2.0-s0
+markov-kmeans (t0),180.0,180,0.8995149596505947,0.000277,exact,exact-sep2.0-s0
+fixed iterations,200.0,200,0.9508075694995893,5.1e-05,exact,exact-sep2.0-s0
+markov-kmeans (t0),200.0,200,0.9677897090634355,5.2e-05,exact,exact-sep2.0-s0
+fixed iterations,230.0,216,1.0,0.0,exact,exact-sep2.0-s0
+markov-kmeans (t0),230.0,216,1.0182873267089785,0.0,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.03,14,0.2830691729297013,0.010087,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.01693383995333567,15,0.28675706696952824,0.009906,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.009558497852172911,15,0.28682113158183015,0.009906,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.005395402427433293,16,0.291314579707275,0.009744,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.003045496039666474,20,0.3091894529271349,0.009233,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.0017190647504743226,34,0.3677339998695783,0.007459,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.001,49,0.4283438735241124,0.006233,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.000970345578465104,49,0.42871684358812334,0.006233,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.0005477225575051662,83,0.5731714075197989,0.004381,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.0003091682042541392,137,0.782194482185573,0.000788,exact,exact-sep2.0-s0
+markov-kmeans (auto),0.00017451349631665946,137,0.7846308069822477,0.000788,exact,exact-sep2.0-s0
+markov-kmeans (auto),9.850612054411147e-05,137,0.7888636881058054,0.000788,exact,exact-sep2.0-s0
+markov-kmeans (auto),5.560289599059913e-05,138,0.7846112064253331,0.000777,exact,exact-sep2.0-s0
+markov-kmeans (auto),3.1385684721559236e-05,140,0.7930804619616879,0.000765,exact,exact-sep2.0-s0
+markov-kmeans (auto),1.7716005396691216e-05,141,0.8046451463336447,0.000761,exact,exact-sep2.0-s0
+markov-kmeans (auto),1e-05,209,1.067661237723119,1.6e-05,exact,exact-sep2.0-s0
+sklearn tol,0.1,7,0.2480673705364938,0.011681,exact,exact-sep2.0-s0
+sklearn tol,0.03162277660168379,8,0.2522475428087163,0.011355,exact,exact-sep2.0-s0
+sklearn tol,0.01,8,0.2522475428087163,0.011355,exact,exact-sep2.0-s0
+sklearn tol,0.0031622776601683794,8,0.2522475428087163,0.011355,exact,exact-sep2.0-s0
+sklearn tol,0.001,8,0.2522475428087163,0.011355,exact,exact-sep2.0-s0
+sklearn tol,0.00031622776601683794,19,0.3010472144348889,0.009353,exact,exact-sep2.0-s0
+sklearn tol,0.0001,33,0.3571242860549027,0.007548,exact,exact-sep2.0-s0
+sklearn tol,3.1622776601683795e-05,48,0.41492481639891826,0.006288,exact,exact-sep2.0-s0
+sklearn tol,9.999999999999999e-06,135,0.7394561343557421,0.000815,exact,exact-sep2.0-s0
+sklearn tol,3.162277660168379e-06,137,0.745827958672761,0.000788,exact,exact-sep2.0-s0
+sklearn tol,1e-06,141,0.7582449432187243,0.000761,exact,exact-sep2.0-s0
+sklearn tol,3.162277660168379e-07,149,0.7829608887481334,0.000705,exact,exact-sep2.0-s0
+sklearn tol,1e-07,210,0.9819204180298767,1.4e-05,exact,exact-sep2.0-s0
+sklearn tol,3.162277660168379e-08,216,1.0,0.0,exact,exact-sep2.0-s0
+sklearn tol,1e-08,216,1.0,0.0,exact,exact-sep2.0-s0
+sklearn tol,3.1622776601683795e-09,216,1.0,0.0,exact,exact-sep2.0-s0
+sklearn tol,1e-09,216,1.0,0.0,exact,exact-sep2.0-s0
+Perez-Ortega,0.1,1,0.06143895655354197,0.068065,exact,exact-sep2.0-s0
+Perez-Ortega,0.046415888336127795,2,0.092037426099266,0.054701,exact,exact-sep2.0-s0
+Perez-Ortega,0.03,2,0.092037426099266,0.054701,exact,exact-sep2.0-s0
+Perez-Ortega,0.021544346900318843,2,0.092037426099266,0.054701,exact,exact-sep2.0-s0
+Perez-Ortega,0.01,6,0.2280677901023278,0.012168,exact,exact-sep2.0-s0
+Perez-Ortega,0.004641588833612782,6,0.2280677901023278,0.012168,exact,exact-sep2.0-s0
+Perez-Ortega,0.0021544346900318843,7,0.2480673705364938,0.011681,exact,exact-sep2.0-s0
+Perez-Ortega,0.001,7,0.2480673705364938,0.011681,exact,exact-sep2.0-s0
+Perez-Ortega,0.0004641588833612782,9,0.25677454380576215,0.011068,exact,exact-sep2.0-s0
+Perez-Ortega,0.00021544346900318845,19,0.3010472144348889,0.009353,exact,exact-sep2.0-s0
+Perez-Ortega,0.0001,43,0.3957739339026894,0.006609,exact,exact-sep2.0-s0
+Perez-Ortega,4.641588833612782e-05,80,0.539976040158171,0.004483,exact,exact-sep2.0-s0
+Perez-Ortega,2.1544346900318867e-05,136,0.7426460774253829,0.000798,exact,exact-sep2.0-s0
+Perez-Ortega,9.999999999999999e-06,140,0.7552472435194205,0.000765,exact,exact-sep2.0-s0
+Perez-Ortega,4.641588833612782e-06,141,0.7582449432187243,0.000761,exact,exact-sep2.0-s0
+Perez-Ortega,2.1544346900318865e-06,209,0.9788271166732669,1.6e-05,exact,exact-sep2.0-s0
+Perez-Ortega,1e-06,216,1.0,0.0,exact,exact-sep2.0-s0
+full run,0.0,216,1.0,0.0,exact,exact-sep2.0-s0
+fixed iterations,2.0,2,0.08544810451603066,0.091435,exact,exact-sep2.0-s1
+markov-kmeans (t0),2.0,2,0.08923072574207425,0.091435,exact,exact-sep2.0-s1
+fixed iterations,3.0,3,0.1052292030178145,0.08583,exact,exact-sep2.0-s1
+markov-kmeans (t0),3.0,3,0.10978942412956283,0.086644,exact,exact-sep2.0-s1
+fixed iterations,5.0,5,0.16784844398733895,0.076552,exact,exact-sep2.0-s1
+markov-kmeans (t0),5.0,5,0.1740674760301984,0.077312,exact,exact-sep2.0-s1
+fixed iterations,7.0,7,0.21301744708583262,0.075372,exact,exact-sep2.0-s1
+markov-kmeans (t0),7.0,7,0.22051551328437016,0.075688,exact,exact-sep2.0-s1
+fixed iterations,10.0,10,0.23907279322479003,0.074126,exact,exact-sep2.0-s1
+markov-kmeans (t0),10.0,10,0.2482377771930527,0.074174,exact,exact-sep2.0-s1
+fixed iterations,13.0,13,0.25739447179655345,0.072885,exact,exact-sep2.0-s1
+markov-kmeans (t0),13.0,13,0.26179246266973255,0.073057,exact,exact-sep2.0-s1
+fixed iterations,16.0,16,0.2753709372907795,0.07189,exact,exact-sep2.0-s1
+markov-kmeans (t0),16.0,16,0.2784842050125079,0.07191,exact,exact-sep2.0-s1
+fixed iterations,20.0,20,0.2999407476182825,0.070421,exact,exact-sep2.0-s1
+markov-kmeans (t0),20.0,20,0.3032859301512983,0.070432,exact,exact-sep2.0-s1
+fixed iterations,25.0,25,0.333422369250848,0.06858,exact,exact-sep2.0-s1
+markov-kmeans (t0),25.0,25,0.3373243635615093,0.06859,exact,exact-sep2.0-s1
+fixed iterations,30.0,30,0.365226850229808,0.066943,exact,exact-sep2.0-s1
+markov-kmeans (t0),30.0,30,0.3695313146735856,0.066943,exact,exact-sep2.0-s1
+fixed iterations,40.0,40,0.4271963205543395,0.06333,exact,exact-sep2.0-s1
+markov-kmeans (t0),40.0,40,0.4324258050086299,0.063343,exact,exact-sep2.0-s1
+fixed iterations,50.0,50,0.5005077425960655,0.057942,exact,exact-sep2.0-s1
+markov-kmeans (t0),50.0,50,0.5067340838694143,0.057981,exact,exact-sep2.0-s1
+fixed iterations,60.0,60,0.7462648938864721,0.006013,exact,exact-sep2.0-s1
+markov-kmeans (t0),60.0,60,0.7567128813260436,0.007407,exact,exact-sep2.0-s1
+fixed iterations,70.0,70,0.814473392944156,0.00263,exact,exact-sep2.0-s1
+markov-kmeans (t0),70.0,70,0.8228123233990442,0.002633,exact,exact-sep2.0-s1
+fixed iterations,80.0,80,0.849838479709778,0.001865,exact,exact-sep2.0-s1
+markov-kmeans (t0),80.0,80,0.8591985774291903,0.001865,exact,exact-sep2.0-s1
+fixed iterations,100.0,100,0.9123505549789425,0.000657,exact,exact-sep2.0-s1
+markov-kmeans (t0),100.0,100,0.923835917223674,0.000658,exact,exact-sep2.0-s1
+fixed iterations,120.0,120,0.9657852220401184,8.8e-05,exact,exact-sep2.0-s1
+markov-kmeans (t0),120.0,120,0.9792167323796769,8.8e-05,exact,exact-sep2.0-s1
+fixed iterations,140.0,133,1.0,0.0,exact,exact-sep2.0-s1
+markov-kmeans (t0),140.0,133,1.0146739121145683,0.0,exact,exact-sep2.0-s1
+fixed iterations,160.0,133,1.0,0.0,exact,exact-sep2.0-s1
+markov-kmeans (t0),160.0,133,1.014662096846882,0.0,exact,exact-sep2.0-s1
+fixed iterations,180.0,133,1.0,0.0,exact,exact-sep2.0-s1
+markov-kmeans (t0),180.0,133,1.0146604800737788,0.0,exact,exact-sep2.0-s1
+fixed iterations,200.0,133,1.0,0.0,exact,exact-sep2.0-s1
+markov-kmeans (t0),200.0,133,1.0146631789440752,0.0,exact,exact-sep2.0-s1
+fixed iterations,230.0,133,1.0,0.0,exact,exact-sep2.0-s1
+markov-kmeans (t0),230.0,133,1.0146628044506536,0.0,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.03,14,0.26811556627902444,0.072672,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.01693383995333567,15,0.27401709067726837,0.072287,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.009558497852172911,17,0.2860635240117037,0.071532,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.005395402427433293,70,0.8324415465724513,0.002633,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.003045496039666474,71,0.8368798532367691,0.002542,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.0017190647504743226,71,0.8367522811061978,0.002542,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.001,72,0.8402824272024094,0.002477,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.000970345578465104,73,0.8446832241014853,0.002412,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.0005477225575051662,102,0.9455807255166139,0.000576,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.0003091682042541392,116,0.9960621244984282,0.000154,exact,exact-sep2.0-s1
+markov-kmeans (auto),0.00017451349631665946,122,1.0271650469542077,6.9e-05,exact,exact-sep2.0-s1
+markov-kmeans (auto),9.850612054411147e-05,124,1.0321366794658915,5.3e-05,exact,exact-sep2.0-s1
+markov-kmeans (auto),5.560289599059913e-05,129,1.0402991898430076,1e-05,exact,exact-sep2.0-s1
+markov-kmeans (auto),3.1385684721559236e-05,129,1.045080950409832,1e-05,exact,exact-sep2.0-s1
+markov-kmeans (auto),1.7716005396691216e-05,131,1.0456935917620693,3e-06,exact,exact-sep2.0-s1
+markov-kmeans (auto),1e-05,132,1.0488856184416195,0.0,exact,exact-sep2.0-s1
+sklearn tol,0.1,8,0.22621698156229822,0.074984,exact,exact-sep2.0-s1
+sklearn tol,0.03162277660168379,8,0.22621698156229822,0.074984,exact,exact-sep2.0-s1
+sklearn tol,0.01,9,0.23299439148917447,0.074548,exact,exact-sep2.0-s1
+sklearn tol,0.0031622776601683794,9,0.23299439148917447,0.074548,exact,exact-sep2.0-s1
+sklearn tol,0.001,13,0.25739447179655345,0.072885,exact,exact-sep2.0-s1
+sklearn tol,0.00031622776601683794,63,0.7885372491649323,0.003187,exact,exact-sep2.0-s1
+sklearn tol,0.0001,64,0.792156724531786,0.003128,exact,exact-sep2.0-s1
+sklearn tol,3.1622776601683795e-05,64,0.792156724531786,0.003128,exact,exact-sep2.0-s1
+sklearn tol,9.999999999999999e-06,109,0.9370334550837475,0.000341,exact,exact-sep2.0-s1
+sklearn tol,3.162277660168379e-06,117,0.9577029909379989,0.000136,exact,exact-sep2.0-s1
+sklearn tol,1e-06,126,0.9817484311611975,3.1e-05,exact,exact-sep2.0-s1
+sklearn tol,3.162277660168379e-07,130,0.9919324663487983,4e-06,exact,exact-sep2.0-s1
+sklearn tol,1e-07,133,1.0,0.0,exact,exact-sep2.0-s1
+sklearn tol,3.162277660168379e-08,133,1.0,0.0,exact,exact-sep2.0-s1
+sklearn tol,1e-08,133,1.0,0.0,exact,exact-sep2.0-s1
+sklearn tol,3.1622776601683795e-09,133,1.0,0.0,exact,exact-sep2.0-s1
+sklearn tol,1e-09,133,1.0,0.0,exact,exact-sep2.0-s1
+Perez-Ortega,0.1,1,0.05765540547419473,0.097479,exact,exact-sep2.0-s1
+Perez-Ortega,0.046415888336127795,2,0.08544810451603066,0.091435,exact,exact-sep2.0-s1
+Perez-Ortega,0.03,2,0.08544810451603066,0.091435,exact,exact-sep2.0-s1
+Perez-Ortega,0.021544346900318843,2,0.08544810451603066,0.091435,exact,exact-sep2.0-s1
+Perez-Ortega,0.01,5,0.16784844398733895,0.076552,exact,exact-sep2.0-s1
+Perez-Ortega,0.004641588833612782,7,0.21301744708583262,0.075372,exact,exact-sep2.0-s1
+Perez-Ortega,0.0021544346900318843,8,0.22621698156229822,0.074984,exact,exact-sep2.0-s1
+Perez-Ortega,0.001,10,0.23907279322479003,0.074126,exact,exact-sep2.0-s1
+Perez-Ortega,0.0004641588833612782,62,0.7845391430039981,0.003263,exact,exact-sep2.0-s1
+Perez-Ortega,0.00021544346900318845,63,0.7885372491649323,0.003187,exact,exact-sep2.0-s1
+Perez-Ortega,0.0001,64,0.792156724531786,0.003128,exact,exact-sep2.0-s1
+Perez-Ortega,4.641588833612782e-05,102,0.918054194059957,0.000574,exact,exact-sep2.0-s1
+Perez-Ortega,2.1544346900318867e-05,116,0.9551646422232296,0.000154,exact,exact-sep2.0-s1
+Perez-Ortega,9.999999999999999e-06,124,0.9767372721271804,5.1e-05,exact,exact-sep2.0-s1
+Perez-Ortega,4.641588833612782e-06,129,0.9894309289218919,8e-06,exact,exact-sep2.0-s1
+Perez-Ortega,2.1544346900318865e-06,129,0.9894309289218919,8e-06,exact,exact-sep2.0-s1
+Perez-Ortega,1e-06,133,1.0,0.0,exact,exact-sep2.0-s1
+full run,0.0,133,1.0,0.0,exact,exact-sep2.0-s1
+fixed iterations,2.0,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),2.0,2,0.008562585969767372,0.002136,minibatch,minibatch-sep1.5-s0
+fixed iterations,3.0,3,0.013331207231105218,0.001694,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),3.0,3,0.013526047251202383,0.001806,minibatch,minibatch-sep1.5-s0
+fixed iterations,5.0,5,0.021557552658735372,0.001386,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),5.0,5,0.021804830781470018,0.001461,minibatch,minibatch-sep1.5-s0
+fixed iterations,7.0,7,0.03023318463104686,0.00119,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),7.0,7,0.030596239739625976,0.001283,minibatch,minibatch-sep1.5-s0
+fixed iterations,10.0,10,0.04374638761421611,0.001032,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),10.0,10,0.04412404517513392,0.001131,minibatch,minibatch-sep1.5-s0
+fixed iterations,13.0,13,0.05770656954730802,0.000923,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),13.0,13,0.05775318525051225,0.000937,minibatch,minibatch-sep1.5-s0
+fixed iterations,16.0,16,0.0724162423355515,0.000835,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),16.0,16,0.07246714450079661,0.000854,minibatch,minibatch-sep1.5-s0
+fixed iterations,20.0,20,0.09098998496359705,0.000751,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),20.0,20,0.09104808127410614,0.000755,minibatch,minibatch-sep1.5-s0
+fixed iterations,25.0,25,0.12439221989529001,0.000645,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),25.0,25,0.12445984393251566,0.000656,minibatch,minibatch-sep1.5-s0
+fixed iterations,30.0,30,0.15846825319727845,0.000576,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),30.0,30,0.15854546802432926,0.000584,minibatch,minibatch-sep1.5-s0
+fixed iterations,40.0,40,0.2282167981799183,0.00047,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),40.0,40,0.22831393672503467,0.000474,minibatch,minibatch-sep1.5-s0
+fixed iterations,50.0,50,0.28885019325380135,0.000393,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),50.0,50,0.28896580881262374,0.000397,minibatch,minibatch-sep1.5-s0
+fixed iterations,60.0,60,0.3397327425385838,0.00033,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),60.0,60,0.3398675727062015,0.000334,minibatch,minibatch-sep1.5-s0
+fixed iterations,70.0,70,0.3873960462740503,0.000289,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),70.0,70,0.3875506519803849,0.000291,minibatch,minibatch-sep1.5-s0
+fixed iterations,80.0,80,0.4331127872925318,0.000245,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),80.0,80,0.433287488974633,0.000245,minibatch,minibatch-sep1.5-s0
+fixed iterations,100.0,100,0.5186592491780707,0.000174,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),100.0,100,0.5188707415301198,0.000176,minibatch,minibatch-sep1.5-s0
+fixed iterations,120.0,120,0.6246651181657281,0.000117,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),120.0,120,0.6249160458131118,0.000118,minibatch,minibatch-sep1.5-s0
+fixed iterations,140.0,140,0.7191276654731411,5.7e-05,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),140.0,140,0.7194176065849567,5.9e-05,minibatch,minibatch-sep1.5-s0
+fixed iterations,160.0,160,0.8063853634293571,2.1e-05,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),160.0,160,0.8067148613119786,2.4e-05,minibatch,minibatch-sep1.5-s0
+fixed iterations,180.0,180,0.894147174292254,7e-06,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),180.0,180,0.8945167012049536,5e-06,minibatch,minibatch-sep1.5-s0
+fixed iterations,200.0,200,1.0,4.2e-05,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),200.0,200,1.000405095902372,4.2e-05,minibatch,minibatch-sep1.5-s0
+fixed iterations,230.0,200,1.0,4.2e-05,minibatch,minibatch-sep1.5-s0
+markov-kmeans (t0),230.0,200,1.0004053885139317,4.2e-05,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.03,11,0.04856975803259329,0.001025,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.01693383995333567,11,0.04856800979747758,0.001025,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.009558497852172911,11,0.04856779324078579,0.001025,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.005395402427433293,11,0.04856790130112918,0.001025,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.003045496039666474,12,0.05255790143574839,0.000966,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.0017190647504743226,12,0.05255769995290855,0.000966,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.001,13,0.05778033432628625,0.000937,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.000970345578465104,13,0.05778368822523466,0.000937,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.0005477225575051662,13,0.057792661391530685,0.000937,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.0003091682042541392,13,0.0577980213766142,0.000937,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),0.00017451349631665946,31,0.16547283339817653,0.000575,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),9.850612054411147e-05,37,0.2071949258200166,0.000509,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),5.560289599059913e-05,66,0.3708320555787683,0.000311,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),3.1385684721559236e-05,115,0.6024710885446667,0.000128,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),1.7716005396691216e-05,126,0.6523045997365695,0.000115,minibatch,minibatch-sep1.5-s0
+markov-kmeans (auto),1e-05,126,0.6524732836247021,0.000115,minibatch,minibatch-sep1.5-s0
+sklearn tol,0.1,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+sklearn tol,0.03162277660168379,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+sklearn tol,0.01,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+sklearn tol,0.0031622776601683794,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+sklearn tol,0.001,3,0.013331207231105218,0.001694,minibatch,minibatch-sep1.5-s0
+sklearn tol,0.00031622776601683794,4,0.01740578443155426,0.001517,minibatch,minibatch-sep1.5-s0
+sklearn tol,0.0001,5,0.021557552658735372,0.001386,minibatch,minibatch-sep1.5-s0
+sklearn tol,3.1622776601683795e-05,7,0.03023318463104686,0.00119,minibatch,minibatch-sep1.5-s0
+sklearn tol,9.999999999999999e-06,11,0.04852330916543366,0.001003,minibatch,minibatch-sep1.5-s0
+sklearn tol,3.162277660168379e-06,16,0.0724162423355515,0.000835,minibatch,minibatch-sep1.5-s0
+sklearn tol,1e-06,27,0.1378020900764129,0.000617,minibatch,minibatch-sep1.5-s0
+sklearn tol,3.162277660168379e-07,45,0.26333581488450675,0.000436,minibatch,minibatch-sep1.5-s0
+sklearn tol,1e-07,74,0.40415113844029,0.000273,minibatch,minibatch-sep1.5-s0
+sklearn tol,3.162277660168379e-08,131,0.6773638414531366,8.5e-05,minibatch,minibatch-sep1.5-s0
+sklearn tol,1e-08,200,1.0,4.2e-05,minibatch,minibatch-sep1.5-s0
+sklearn tol,3.1622776601683795e-09,200,1.0,4.2e-05,minibatch,minibatch-sep1.5-s0
+sklearn tol,1e-09,200,1.0,4.2e-05,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.1,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.046415888336127795,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.03,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.021544346900318843,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.01,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.004641588833612782,2,0.008401192884700431,0.002136,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.0021544346900318843,3,0.013331207231105218,0.001694,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.001,3,0.013331207231105218,0.001694,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.0004641588833612782,4,0.01740578443155426,0.001517,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.00021544346900318845,5,0.021557552658735372,0.001386,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,0.0001,8,0.035032710957613386,0.001126,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,4.641588833612782e-05,10,0.04374638761421611,0.001032,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,2.1544346900318867e-05,22,0.10487147018768114,0.000709,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,9.999999999999999e-06,35,0.1917978275420733,0.00052,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,4.641588833612782e-06,61,0.3451654612316146,0.000327,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,2.1544346900318865e-06,73,0.3997969079895218,0.000281,minibatch,minibatch-sep1.5-s0
+Perez-Ortega,1e-06,146,0.7482011953728217,4.8e-05,minibatch,minibatch-sep1.5-s0
+full run,0.0,200,1.0,4.2e-05,minibatch,minibatch-sep1.5-s0
+fixed iterations,2.0,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),2.0,2,0.011093959218204578,0.002004,minibatch,minibatch-sep2.0-s0
+fixed iterations,3.0,3,0.01505154632216862,0.00169,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),3.0,3,0.015370326384548608,0.001698,minibatch,minibatch-sep2.0-s0
+fixed iterations,5.0,5,0.0235147647655773,0.001431,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),5.0,5,0.023906354538696356,0.001458,minibatch,minibatch-sep2.0-s0
+fixed iterations,7.0,7,0.03211656526908703,0.00125,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),7.0,7,0.03261293420301365,0.001297,minibatch,minibatch-sep2.0-s0
+fixed iterations,10.0,10,0.04595629841602294,0.001072,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),10.0,10,0.046573188408465485,0.001134,minibatch,minibatch-sep2.0-s0
+fixed iterations,13.0,13,0.06039823516834279,0.000951,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),13.0,13,0.06054606010374249,0.000957,minibatch,minibatch-sep2.0-s0
+fixed iterations,16.0,16,0.07462738319102108,0.000858,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),16.0,16,0.07479337744368228,0.000868,minibatch,minibatch-sep2.0-s0
+fixed iterations,20.0,20,0.09386017956469499,0.000766,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),20.0,20,0.09405187336623358,0.000769,minibatch,minibatch-sep2.0-s0
+fixed iterations,25.0,25,0.11976307976665927,0.000689,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),25.0,25,0.11998908155861966,0.000689,minibatch,minibatch-sep2.0-s0
+fixed iterations,30.0,30,0.1437928931371373,0.000631,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),30.0,30,0.14405318503842846,0.000634,minibatch,minibatch-sep2.0-s0
+fixed iterations,40.0,40,0.19667281005673878,0.000505,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),40.0,40,0.1970036268535544,0.000507,minibatch,minibatch-sep2.0-s0
+fixed iterations,50.0,50,0.24393894084408252,0.000435,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),50.0,50,0.244339526700701,0.000435,minibatch,minibatch-sep2.0-s0
+fixed iterations,60.0,60,0.29825881291858264,0.000361,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),60.0,60,0.298729721540718,0.000363,minibatch,minibatch-sep2.0-s0
+fixed iterations,70.0,70,0.3476687311284088,0.000301,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),70.0,70,0.3482127766653736,0.000302,minibatch,minibatch-sep2.0-s0
+fixed iterations,80.0,80,0.3962285674839627,0.00025,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),80.0,80,0.396843199991549,0.000252,minibatch,minibatch-sep2.0-s0
+fixed iterations,100.0,100,0.5026408663608671,0.000181,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),100.0,100,0.5033939524396382,0.000181,minibatch,minibatch-sep2.0-s0
+fixed iterations,120.0,120,0.5984425334982035,0.000117,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),120.0,120,0.5993368030376587,0.000118,minibatch,minibatch-sep2.0-s0
+fixed iterations,140.0,140,0.6988708466638943,7.9e-05,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),140.0,140,0.6999045862718942,8.1e-05,minibatch,minibatch-sep2.0-s0
+fixed iterations,160.0,160,0.8005233933465429,3.2e-05,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),160.0,160,0.8017101728769116,3.3e-05,minibatch,minibatch-sep2.0-s0
+fixed iterations,180.0,180,0.9005232390756442,6e-06,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),180.0,180,0.9018517423586592,6e-06,minibatch,minibatch-sep2.0-s0
+fixed iterations,200.0,200,1.0,4.1e-05,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),200.0,200,1.0014960388296132,4e-05,minibatch,minibatch-sep2.0-s0
+fixed iterations,230.0,200,1.0,4.1e-05,minibatch,minibatch-sep2.0-s0
+markov-kmeans (t0),230.0,200,1.0014955068057492,4e-05,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.03,11,0.050923342067940226,0.001034,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.01693383995333567,11,0.0509144451900066,0.001034,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.009558497852172911,11,0.050916530985985795,0.001034,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.005395402427433293,11,0.05091775735519857,0.001034,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.003045496039666474,12,0.05571474784027521,0.001004,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.0017190647504743226,12,0.05571999160773234,0.001004,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.001,13,0.06063433294726096,0.000957,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.000970345578465104,13,0.06062911849824575,0.000957,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.0005477225575051662,14,0.0655595955288033,0.000932,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.0003091682042541392,14,0.06564440396641717,0.000932,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),0.00017451349631665946,24,0.11444537314256653,0.000707,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),9.850612054411147e-05,45,0.22306743953474656,0.000478,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),5.560289599059913e-05,72,0.36091173296220863,0.000295,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),3.1385684721559236e-05,72,0.36047434440471454,0.000295,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),1.7716005396691216e-05,94,0.4791981509093993,0.000202,minibatch,minibatch-sep2.0-s0
+markov-kmeans (auto),1e-05,110,0.5578145627704918,0.00015,minibatch,minibatch-sep2.0-s0
+sklearn tol,0.1,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+sklearn tol,0.03162277660168379,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+sklearn tol,0.01,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+sklearn tol,0.0031622776601683794,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+sklearn tol,0.001,3,0.01505154632216862,0.00169,minibatch,minibatch-sep2.0-s0
+sklearn tol,0.00031622776601683794,3,0.01505154632216862,0.00169,minibatch,minibatch-sep2.0-s0
+sklearn tol,0.0001,5,0.0235147647655773,0.001431,minibatch,minibatch-sep2.0-s0
+sklearn tol,3.1622776601683795e-05,7,0.03211656526908703,0.00125,minibatch,minibatch-sep2.0-s0
+sklearn tol,9.999999999999999e-06,10,0.04595629841602294,0.001072,minibatch,minibatch-sep2.0-s0
+sklearn tol,3.162277660168379e-06,16,0.07462738319102108,0.000858,minibatch,minibatch-sep2.0-s0
+sklearn tol,1e-06,26,0.12437194279820647,0.000676,minibatch,minibatch-sep2.0-s0
+sklearn tol,3.162277660168379e-07,43,0.21044486674612564,0.000486,minibatch,minibatch-sep2.0-s0
+sklearn tol,1e-07,74,0.3659693966637203,0.000282,minibatch,minibatch-sep2.0-s0
+sklearn tol,3.162277660168379e-08,122,0.607442656151919,0.000115,minibatch,minibatch-sep2.0-s0
+sklearn tol,1e-08,199,0.995173412776922,3.9e-05,minibatch,minibatch-sep2.0-s0
+sklearn tol,3.1622776601683795e-09,200,1.0,4.1e-05,minibatch,minibatch-sep2.0-s0
+sklearn tol,1e-09,200,1.0,4.1e-05,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.1,1,0.006454413906191357,0.00419,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.046415888336127795,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.03,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.021544346900318843,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.01,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.004641588833612782,2,0.010811812951145201,0.002004,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.0021544346900318843,3,0.01505154632216862,0.00169,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.001,3,0.01505154632216862,0.00169,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.0004641588833612782,3,0.01505154632216862,0.00169,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.00021544346900318845,4,0.01930135022094065,0.001552,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,0.0001,7,0.03211656526908703,0.00125,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,4.641588833612782e-05,12,0.055553926392051214,0.000995,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,2.1544346900318867e-05,23,0.10909436887403039,0.000717,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,9.999999999999999e-06,37,0.18006840032856383,0.000539,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,4.641588833612782e-06,72,0.35687599727930663,0.000293,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,2.1544346900318865e-06,72,0.35687599727930663,0.000293,minibatch,minibatch-sep2.0-s0
+Perez-Ortega,1e-06,110,0.5519810570619157,0.00015,minibatch,minibatch-sep2.0-s0
+full run,0.0,200,1.0,4.1e-05,minibatch,minibatch-sep2.0-s0
+fixed iterations,2.0,2,0.01312541655845123,0.041519,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),2.0,2,0.013271553990494032,0.041519,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,3.0,3,0.019508881054614482,0.040998,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),3.0,3,0.019667138642281524,0.041089,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,5.0,5,0.03286896585036445,0.040433,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),5.0,5,0.033086527879499485,0.040434,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,7.0,7,0.0454314477644013,0.039768,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),7.0,7,0.045734107759805825,0.03981,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,10.0,10,0.06476365921180224,0.038537,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),10.0,10,0.06512474490894435,0.038779,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,13.0,13,0.0836605385157533,0.038627,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),13.0,13,0.08373421689667497,0.039091,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,16.0,16,0.10185569849946913,0.011707,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),16.0,16,0.10195310065813888,0.013607,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,20.0,20,0.12812638935908446,0.010271,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),20.0,20,0.128225501982354,0.010525,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,25.0,25,0.16018190953197592,0.009239,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),25.0,25,0.16025640194540078,0.010052,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,30.0,30,0.18955546171327217,0.008429,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),30.0,30,0.1896362937399537,0.00898,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,40.0,40,0.24978756436176056,0.006313,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),40.0,40,0.24988695339048259,0.007004,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,50.0,50,0.31101018135203173,0.005191,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),50.0,50,0.3111271424747374,0.00548,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,60.0,60,0.3716347291484737,0.004573,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),60.0,60,0.3717682667930978,0.00466,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,70.0,70,0.43064339286660935,0.003879,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),70.0,70,0.4307939937639269,0.003889,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,80.0,80,0.48894505237960884,0.003497,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),80.0,80,0.4891119131950246,0.003478,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,100.0,100,0.6053195727092449,0.001762,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),100.0,100,0.6055235286555644,0.001921,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,120.0,120,0.6890457933989834,0.000701,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),120.0,120,0.6892839958356172,0.000572,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,140.0,140,0.7658136992194149,0.000732,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),140.0,140,0.7660877967371127,0.000331,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,160.0,160,0.8445396786808324,0.000597,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),160.0,160,0.8448478707796904,0.000204,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,180.0,180,0.922067758868356,0.000575,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),180.0,180,0.9224126590440426,0.000215,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,200.0,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),200.0,200,1.0003778762082816,0.00019,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,230.0,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (t0),230.0,200,1.00037780030314,0.00019,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.03,12,0.07769734230036267,0.038912,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.01693383995333567,25,0.16031348330408435,0.009155,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.009558497852172911,25,0.1603169417197457,0.009155,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.005395402427433293,27,0.1721926000973119,0.008784,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.003045496039666474,56,0.347861923246572,0.004827,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.0017190647504743226,123,0.7020223853280093,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.001,123,0.7020409851442777,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.000970345578465104,123,0.7020249697469462,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.0005477225575051662,123,0.7020342507508343,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.0003091682042541392,123,0.7020287070257284,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),0.00017451349631665946,123,0.70208609432422,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),9.850612054411147e-05,123,0.7020217193006426,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),5.560289599059913e-05,123,0.7020193217462025,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),3.1385684721559236e-05,123,0.702018669512839,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),1.7716005396691216e-05,123,0.7020015604260978,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+markov-kmeans (auto),1e-05,123,0.7020205114823205,0.000459,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,0.1,5,0.03286896585036445,0.040433,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,0.03162277660168379,16,0.10185569849946913,0.011707,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,0.01,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,0.0031622776601683794,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,0.001,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,0.00031622776601683794,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,0.0001,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,3.1622776601683795e-05,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,9.999999999999999e-06,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,3.162277660168379e-06,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,1e-06,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,3.162277660168379e-07,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,1e-07,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,3.162277660168379e-08,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,1e-08,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,3.1622776601683795e-09,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+sklearn tol,1e-09,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.1,2,0.01312541655845123,0.041519,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.046415888336127795,3,0.019508881054614482,0.040998,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.03,3,0.019508881054614482,0.040998,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.021544346900318843,3,0.019508881054614482,0.040998,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.01,3,0.019508881054614482,0.040998,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.004641588833612782,4,0.026013915533687735,0.04073,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.0021544346900318843,16,0.10185569849946913,0.011707,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.001,22,0.14077338410312243,0.009863,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.0004641588833612782,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.00021544346900318845,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,0.0001,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,4.641588833612782e-05,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,2.1544346900318867e-05,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,9.999999999999999e-06,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,4.641588833612782e-06,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,2.1544346900318865e-06,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+Perez-Ortega,1e-06,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+full run,0.0,200,1.0,0.000564,minibatch_const,minibatch_const-sep1.5-s0-eta0.0002
+fixed iterations,2.0,2,0.014466056429800254,0.054098,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),2.0,2,0.014551461523511878,0.054098,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,3.0,3,0.021792758537357137,0.03293,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),3.0,3,0.02190402080458041,0.033306,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,5.0,5,0.03665773703687229,0.020102,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),5.0,5,0.036820431910073864,0.021229,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,7.0,7,0.05073562838391704,0.019186,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),7.0,7,0.05090318272943027,0.019635,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,10.0,10,0.07176509120400237,0.017537,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),10.0,10,0.07196665122232257,0.018275,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,13.0,13,0.09551568293111529,0.015599,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),13.0,13,0.09558886828466867,0.015578,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,16.0,16,0.11387766493348558,0.01334,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),16.0,16,0.11394765257824988,0.013399,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,20.0,20,0.1311950936422388,0.011293,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),20.0,20,0.13126923553226993,0.011369,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,25.0,25,0.15197667887846603,0.009142,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),25.0,25,0.15205714612128052,0.009337,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,30.0,30,0.17587298676604893,0.007966,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),30.0,30,0.1759601160918573,0.008069,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,40.0,40,0.2222310995133999,0.006097,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),40.0,40,0.2223350039091234,0.006879,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,50.0,50,0.2678173265922675,0.004238,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),50.0,50,0.2679420308069587,0.005071,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,60.0,60,0.3133090035112764,0.003196,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),60.0,60,0.3134535789969942,0.003616,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,70.0,70,0.36086949437651455,0.002309,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),70.0,70,0.36103671689131306,0.002732,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,80.0,80,0.40800835928474183,0.00172,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),80.0,80,0.408203312252623,0.001958,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,100.0,100,0.503731338335807,0.001152,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),100.0,100,0.5039772862691965,0.001147,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,120.0,120,0.5990612839372614,0.001054,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),120.0,120,0.5993524217978342,0.000925,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,140.0,140,0.6968254023150395,0.000767,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),140.0,140,0.6971566736427098,0.000659,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,160.0,160,0.7935475597498342,0.000343,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),160.0,160,0.7939211354385167,0.000295,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,180.0,180,0.8851463058901637,0.000342,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),180.0,180,0.8855724661771504,0.00013,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,200.0,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),200.0,200,1.0004781883786424,0.000154,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,230.0,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (t0),230.0,200,1.000477878558947,0.000154,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.03,13,0.09560633816185561,0.015578,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.01693383995333567,14,0.10309839428064646,0.01477,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.009558497852172911,24,0.1479843220366395,0.009874,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.005395402427433293,31,0.18106910936113355,0.00782,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.003045496039666474,47,0.2540562560701794,0.004844,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.0017190647504743226,90,0.45675670383883943,0.001315,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.001,94,0.47467831386187753,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.000970345578465104,94,0.4746738765138529,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.0005477225575051662,94,0.474711384074712,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.0003091682042541392,94,0.4747022627384379,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),0.00017451349631665946,94,0.4747029345000549,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),9.850612054411147e-05,94,0.47470861932717484,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),5.560289599059913e-05,94,0.47469420333787654,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),3.1385684721559236e-05,94,0.4747815325951636,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),1.7716005396691216e-05,94,0.47486489693866135,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+markov-kmeans (auto),1e-05,94,0.47473420110429315,0.00124,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,0.1,5,0.03665773703687229,0.020102,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,0.03162277660168379,16,0.11387766493348558,0.01334,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,0.01,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,0.0031622776601683794,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,0.001,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,0.00031622776601683794,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,0.0001,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,3.1622776601683795e-05,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,9.999999999999999e-06,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,3.162277660168379e-06,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,1e-06,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,3.162277660168379e-07,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,1e-07,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,3.162277660168379e-08,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,1e-08,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,3.1622776601683795e-09,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+sklearn tol,1e-09,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.1,1,0.007460327833845619,0.070803,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.046415888336127795,2,0.014466056429800254,0.054098,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.03,2,0.014466056429800254,0.054098,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.021544346900318843,2,0.014466056429800254,0.054098,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.01,5,0.03665773703687229,0.020102,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.004641588833612782,5,0.03665773703687229,0.020102,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.0021544346900318843,5,0.03665773703687229,0.020102,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.001,5,0.03665773703687229,0.020102,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.0004641588833612782,66,0.3416544841901218,0.002721,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.00021544346900318845,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,0.0001,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,4.641588833612782e-05,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,2.1544346900318867e-05,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,9.999999999999999e-06,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,4.641588833612782e-06,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,2.1544346900318865e-06,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+Perez-Ortega,1e-06,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+full run,0.0,200,1.0,0.00036,minibatch_const,minibatch_const-sep2.0-s0-eta0.0002
+fixed iterations,2.0,2,0.007056597079993571,0.102705,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),2.0,2,0.007169302918823999,0.102705,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,3.0,3,0.01001901294548282,0.093461,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),3.0,3,0.010158720892083336,0.096824,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,5.0,5,0.016115832386675383,0.054813,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),5.0,5,0.01633812238664223,0.063996,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,7.0,7,0.022397789137620777,0.032906,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),7.0,7,0.02268918794463045,0.047638,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,10.0,10,0.03135392042054081,0.0292,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),10.0,10,0.03166446449727142,0.0311,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,13.0,13,0.040482332372551874,0.025534,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),13.0,13,0.04056796148799131,0.025622,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,16.0,16,0.05388587623632187,0.023869,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),16.0,16,0.05393263733119709,0.023682,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,20.0,20,0.0782796733510763,0.022097,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),20.0,20,0.07832649372051555,0.022082,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,25.0,25,0.09601745860714449,0.019701,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),25.0,25,0.09606309987849304,0.021616,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,30.0,30,0.12225365534365931,0.01754,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),30.0,30,0.12230586206761179,0.019254,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,40.0,40,0.16934099698601413,0.013831,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),40.0,40,0.16940116691874463,0.014928,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,50.0,50,0.20055333622198482,0.011535,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),50.0,50,0.2006231338848102,0.012187,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,60.0,60,0.2329414989817191,0.009464,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),60.0,60,0.23301994692126482,0.009988,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,70.0,70,0.26447400348257427,0.008194,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),70.0,70,0.2645616431892042,0.008394,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,80.0,80,0.2965863791091915,0.007332,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),80.0,80,0.2966824500820896,0.007274,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,100.0,100,0.4020401209814118,0.005098,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),100.0,100,0.4021546702859006,0.005085,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,120.0,120,0.5233053324081074,0.003439,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),120.0,120,0.5234392150276042,0.003197,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,140.0,140,0.6315187113249694,0.002543,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),140.0,140,0.6316716044358578,0.002258,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,160.0,160,0.7563562746105001,0.001631,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),160.0,160,0.7565285478726164,0.001047,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,180.0,180,0.8782987299551709,0.001296,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),180.0,180,0.8784938952113333,0.000434,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,200.0,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),200.0,200,1.0002146781263819,0.000909,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,230.0,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (t0),230.0,200,1.0002159667824095,0.000909,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.03,16,0.053947052662558594,0.023682,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.01693383995333567,22,0.08658610543624388,0.021137,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.009558497852172911,42,0.17652174702684606,0.013161,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.005395402427433293,103,0.4205110017545944,0.004739,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.003045496039666474,124,0.5483124730750835,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.0017190647504743226,124,0.5483207498765598,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.001,124,0.5483820599575893,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.000970345578465104,124,0.5483486238554739,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.0005477225575051662,124,0.5483170805911417,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.0003091682042541392,124,0.5483231794145063,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),0.00017451349631665946,124,0.5483491820877082,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),9.850612054411147e-05,124,0.5483058778386173,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),5.560289599059913e-05,124,0.5483077066694008,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),3.1385684721559236e-05,124,0.5483215260289234,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),1.7716005396691216e-05,124,0.54829282785124,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+markov-kmeans (auto),1e-05,124,0.5483520208880324,0.00297,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,0.1,7,0.022397789137620777,0.032906,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,0.03162277660168379,15,0.047881158729071664,0.024337,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,0.01,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,0.0031622776601683794,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,0.001,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,0.00031622776601683794,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,0.0001,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,3.1622776601683795e-05,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,9.999999999999999e-06,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,3.162277660168379e-06,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,1e-06,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,3.162277660168379e-07,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,1e-07,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,3.162277660168379e-08,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,1e-08,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,3.1622776601683795e-09,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+sklearn tol,1e-09,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.1,3,0.01001901294548282,0.093461,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.046415888336127795,3,0.01001901294548282,0.093461,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.03,3,0.01001901294548282,0.093461,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.021544346900318843,3,0.01001901294548282,0.093461,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.01,7,0.022397789137620777,0.032906,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.004641588833612782,7,0.022397789137620777,0.032906,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.0021544346900318843,20,0.0782796733510763,0.022097,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.001,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.0004641588833612782,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.00021544346900318845,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,0.0001,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,4.641588833612782e-05,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,2.1544346900318867e-05,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,9.999999999999999e-06,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,4.641588833612782e-06,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,2.1544346900318865e-06,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+Perez-Ortega,1e-06,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+full run,0.0,200,1.0,0.001773,minibatch_const,minibatch_const-sep1.5-s1-eta0.0002
+fixed iterations,2.0,2,0.013669800482734175,0.039058,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),2.0,2,0.013738542425270119,0.039058,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,3.0,3,0.020499558369341885,0.029779,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),3.0,3,0.02057954250287913,0.035047,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,5.0,5,0.03398260614611219,0.010262,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),5.0,5,0.03409373410322084,0.018478,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,7.0,7,0.047619107317402536,0.007587,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),7.0,7,0.04776386201065873,0.007987,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,10.0,10,0.06801036835284663,0.005056,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),10.0,10,0.06818875443759613,0.006172,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,13.0,13,0.08528069757347179,0.004006,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),13.0,13,0.08531936639889476,0.004329,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,16.0,16,0.1024723425707223,0.004055,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),16.0,16,0.10250199674900445,0.003928,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,20.0,20,0.12553717382642407,0.004223,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),20.0,20,0.12556861843812533,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,25.0,25,0.15373735613654818,0.004319,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),25.0,25,0.15377325642413509,0.003123,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,30.0,30,0.1824017798123865,0.003837,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),30.0,30,0.18244202190377012,0.003174,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,40.0,40,0.23910966347975868,0.004302,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),40.0,40,0.23915894973161178,0.003072,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,50.0,50,0.29526333956660933,0.004562,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),50.0,50,0.2953220856002051,0.002793,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,60.0,60,0.352483949857834,0.003666,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),60.0,60,0.352551457289299,0.002841,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,70.0,70,0.40794126351426674,0.003034,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),70.0,70,0.4080173883956462,0.002213,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,80.0,80,0.46439598501128304,0.002831,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),80.0,80,0.4644814243015271,0.001853,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,100.0,100,0.57707714567106,0.002734,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),100.0,100,0.5771805656275327,0.001467,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,120.0,120,0.6882244986028805,0.003115,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),120.0,120,0.6883469259183281,0.001773,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,140.0,140,0.7735918093287597,0.002648,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),140.0,140,0.7737368634505739,0.001604,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,160.0,160,0.850046290517649,0.00249,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),160.0,160,0.8502091958235225,0.001047,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,180.0,180,0.9250239355079349,0.003111,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),180.0,180,0.925204629466566,0.001213,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,200.0,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),200.0,200,1.0001988972767335,0.001261,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+fixed iterations,230.0,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (t0),230.0,200,1.0001982817318744,0.001261,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.03,14,0.09098985840988201,0.004341,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.01693383995333567,14,0.09098968234478252,0.004341,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.009558497852172911,20,0.12559706035181512,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.005395402427433293,20,0.12560032663875778,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.003045496039666474,20,0.12559825561984572,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.0017190647504743226,20,0.12559765931144368,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.001,20,0.12559720025181026,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.000970345578465104,20,0.12559755122361893,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.0005477225575051662,20,0.12559864413042537,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.0003091682042541392,20,0.12560264259446385,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),0.00017451349631665946,20,0.12560977836686638,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),9.850612054411147e-05,20,0.12560064947859242,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),5.560289599059913e-05,20,0.12560111866260962,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),3.1385684721559236e-05,20,0.1256043137495443,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),1.7716005396691216e-05,20,0.12561074360341096,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+markov-kmeans (auto),1e-05,20,0.12560416636229657,0.003203,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,0.1,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,0.03162277660168379,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,0.01,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,0.0031622776601683794,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,0.001,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,0.00031622776601683794,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,0.0001,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,3.1622776601683795e-05,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,9.999999999999999e-06,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,3.162277660168379e-06,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,1e-06,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,3.162277660168379e-07,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,1e-07,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,3.162277660168379e-08,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,1e-08,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,3.1622776601683795e-09,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+sklearn tol,1e-09,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.1,2,0.013669800482734175,0.039058,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.046415888336127795,2,0.013669800482734175,0.039058,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.03,2,0.013669800482734175,0.039058,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.021544346900318843,3,0.020499558369341885,0.029779,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.01,5,0.03398260614611219,0.010262,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.004641588833612782,5,0.03398260614611219,0.010262,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.0021544346900318843,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.001,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.0004641588833612782,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.00021544346900318845,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,0.0001,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,4.641588833612782e-05,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,2.1544346900318867e-05,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,9.999999999999999e-06,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,4.641588833612782e-06,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,2.1544346900318865e-06,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+Perez-Ortega,1e-06,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
+full run,0.0,200,1.0,0.002792,minibatch_const,minibatch_const-sep1.5-s0-eta0.001
