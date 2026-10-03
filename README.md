@@ -79,6 +79,7 @@ Full report: [docs/results.md](https://github.com/busimm3318/Markov-K-means/blob
 
 **Findings:**
 * **Compute.** Stopping when few points move saves 81–98% of distance evaluations versus running Lloyd to convergence. Against Hamerly-accelerated Lloyd it saves 52–68% of time (73–84% at n = 3×10⁷). The saving comes from *stopping*; the Markov step costs about one Hamerly iteration.
+* **Cost and error together.** Compared as complete procedures on the same runs (scikit-learn's tolerance rule, the changed-labels rule of Pérez-Ortega et al., fixed iteration counts, running to the end), no alternative is both cheaper and more accurate than Markov-K-means on any of the 10 instances. Under drift it stops within 0–5% of the hindsight-optimal time for its error, with the most consistent error (≤ 0.62%). Under persistent oscillation its settlement reaches cost–error points that no stop-and-keep rule reaches.
 * **Accuracy.**
   * After a drift (exact Lloyd, 1/count mini-batch), Markov settlement is as good as keeping the current labels. It avoids the failure of majority voting, which pulls points that already moved back to their old cluster (43–53% wrong).
   * Over 90% of the remaining error comes from points that look stable at T₀ and move later.
@@ -169,6 +170,7 @@ pip install markov-kmeans
 | 오차 | 표류 체제에서 Markov 편입은 "현재 라벨 유지"와 같은 수준이고, 다수결의 함정(이미 옮긴 점을 되돌림, 43–53% 오류)을 피한다. 남은 오차의 90% 이상은 U 밖에서 나온다. 영구 진동 체제에서는 점유율·Markov 편입이 유지보다 낫다(U 오류 11–21% 대 23–30%). |
 | 연속 해석 | 표류 체제에서 분수형 π는 드물고(U의 0.2–9%) "아직 미결정"의 신호다. mini-batch에서는 틀릴 점 탐지에서 GMM 사후보다 낫다(AUROC 0.71–0.98 대 0.60–0.75). 영구 진동 체제에서는 그런 점의 80%가 실제로 계속 오가고, π가 장기 점유율에 맞게 보정돼 있다(0.55→0.53, 0.85→0.83). |
 | 응용 | 색 양자화(사진 100장)에서는 반복의 약 1/3 시점에 화질이 이미 끝까지 돌린 결과와 0.01 dB 안으로 들어온다. 자동 규칙은 안전하지만(손실 0.002 dB 이하) 보수적이고(시간 79–84%), 표본 학습이 가장 싸다. EMA VQ 코드북(이미지 토크나이저)에서는 벡터의 5–26%가 계속 코드를 바꾸고 코드가 크게 흔들려 자동 규칙이 개입하지 않았다. soft 토큰은 거리 기반이 이력 기반보다 낫다. |
+| 비용·오차 동시 비교 | 완성된 절차끼리(sklearn tol, Pérez-Ortega 규칙, 고정 반복, 끝까지) 같은 실행에서 시간과 오류를 함께 비교하면, 10개 사례 모두에서 Markov-K-means보다 싸면서 정확한 절차가 없다. 표류에서는 사후 최적 정지 대비 시간 +0–5%로 가장 일정한 오류(최대 0.62%)를 내고, 영구 진동에서는 어떤 "멈춤 + 유지" 절차도 못 내는 결과를 낸다. |
 | 자동 판단 | N=10⁶ 10개 사례에서 끝까지 돌린 시간의 6–83%로 오류율 0.05–0.62%를 낸다. 상수 스텝에서는 sklearn식 규칙이 끝내 멈추지 못하지만, 자동 규칙은 10–62% 시점에서 멈추고 끝까지 돌린 결과와 비슷한 오류를 낸다. |
 
 **권장 사용법:** 극소수 비수렴 점 때문에 반복을 계속하는 비용을 줄이는 정지 규칙, 그리고 그 점들의 불확실성 표시로 쓴다. 영구 진동 체제에서는 소속 비율로도 쓴다. 끝까지 수렴한 결과보다 정확해지는 방법으로 기대하면 안 된다.

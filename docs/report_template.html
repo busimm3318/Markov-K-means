@@ -192,6 +192,7 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
         <div><span>오류율</span><span>0.05 ~ 0.62%</span></div>
         <div><span>상수 스텝: sklearn tol / 자동</span><span>안 멈춤 / 10–62%</span></div>
         <div><span>정확 Lloyd: sklearn tol 대비 오류</span><span>4개 모두 더 작음</span></div>
+        <div><span>더 싸면서 더 정확한 대안</span><span>10개 중 0개</span></div>
       </div>
     </article>
   </div>
@@ -317,6 +318,20 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
     <li><b>정확 Lloyd:</b> 시간 17~59%를 아끼고, sklearn식 tol 규칙보다 시간을 5~21%p 더 쓰는 대신 4개 사례 모두 오류가 작다.</li>
     <li><b>상수 스텝:</b> sklearn식 규칙과 0.1.0 규칙은 200 epoch까지 멈추지 못한다. 자동 규칙은 진동을 진단해 10~62% 시점에서 멈추고, 끝까지 돌린 결과와 비슷한 오류를 낸다.</li>
     <li><b>편입 방식:</b> 표류에서 빈도로 편입하면 U의 26~53%를 틀리고, 진동에서는 유지가 25~40%를 틀린다. 체제별 자동 편입이 양쪽에서 가장 낫거나 같다.</li>
+  </ul>
+</section>
+
+<section id="pareto">
+  <header><div class="eyebrow">비용 · 오차 동시 비교</div><h2>완성된 절차로 비교하면 지배당하지 않는다</h2></header>
+  <p class="prose">멈춤과 편입을 떼어 보면 각각의 몫이 작아 보인다. 사용자가 고르는 것은 완성된 절차이므로, 각 절차를 쓰는 그대로 같은 궤적에서 돌려 시간과 오류를 함께 비교했다(N=10⁶, 10개 사례). 회색 실선은 결과를 미리 알고 가장 좋은 반복 수에서 멈췄을 때의 곡선이고, 점선은 거기에 markov-kmeans식 편입을 더한 곡선이다.</p>
+  <figure class="chart"><div class="chart-frame"><img src="figures/fig8_cost_error.png" alt="비용–오차 평면에서의 절차 비교" loading="lazy"></div><figcaption><span class="fig-no">그림 8</span>표류 체제(왼쪽, 가운데)에서는 모든 절차가 같은 곡선 위의 다른 지점이다. 진동 체제(오른쪽)에서는 편입이 곡선 자체를 낮춘다.</figcaption></figure>
+  {{T:pareto_summary}}
+  <details><summary>오류의 가치에 따라 가장 나은 절차</summary>{{T:pareto_lambda}}</details>
+  <ul class="points prose">
+    <li><b>지배:</b> 10개 사례 모두에서 markov-kmeans 0.2.0보다 싸면서 더 정확한 절차가 없다.</li>
+    <li><b>표류 체제:</b> 같은 오류를 내는 사후 최적 정지 대비 시간이 0~5%만 더 들고, 오류가 가장 일정하다(정확 Lloyd 최대 0.62%; sklearn tol 0.98%, 고정 반복 5.8~7.0%, Pérez-Ortega 9.9%).</li>
+    <li><b>진동 체제:</b> 4개 중 3개 사례에서 같은 시간에 어떤 "멈춤 + 유지" 절차도 낼 수 없는 오류를 낸다. η=10⁻³에서는 같은 오류에 라벨 유지 절차가 2.9배의 시간을 쓴다.</li>
+    <li><b>정리:</b> "이득은 멈춤에서만"은 절제 분석의 결론이다. 완성된 절차로는 표류에서 효율적 정지 지점을 일관되게 고르고, 진동에서 기존 절차가 도달할 수 없는 비용–오류 조합을 만든다.</li>
   </ul>
 </section>
 
