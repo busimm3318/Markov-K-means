@@ -12,10 +12,12 @@ reaches the same error in less time.
     Perez-Ortega              threshold on the share of changed labels swept
     fixed iterations          fixed number of iterations, labels kept
 
-    python -m experiments.time_for_error   # experiments/results/time_for_error.csv, docs/figures/fig9_time_for_error.png
+    python -m experiments.time_for_error          # experiments/results/time_for_error.csv, docs/figures/fig9_time_for_error.png
+    python -m experiments.time_for_error --plot   # redraw the figure from the saved CSV
 """
 from __future__ import annotations
 
+import sys
 import time
 
 import numpy as np
@@ -121,15 +123,18 @@ def report_tables(cv):
     return T
 
 
-TITLE = {"exact": "exact Lloyd (4 instances)", "minibatch": "mini-batch 1/count (2 instances)",
-         "minibatch_const": "mini-batch constant step (4 instances)"}
+TITLE = {"exact": "Exact Lloyd / Hamerly\nboundary points drift, then settle",
+         "minibatch": "Mini-batch, 1/count step\nboundary points drift, then settle",
+         "minibatch_const": "Mini-batch, constant step (EMA)\nboundary points keep oscillating"}
 
 
 def figure(cv):
-    fig, axes = plt.subplots(1, 3, figsize=(17, 5.6))
-    style = {"markov-kmeans (auto)": (SERIES[0], "o", "-", 2.6), "markov-kmeans (t0)": (SERIES[0], "o", "--", 1.4),
-             "sklearn tol": (SERIES[1], "s", "-", 1.8), "Perez-Ortega": (SERIES[2], "^", "-", 1.8),
-             "fixed iterations": (SERIES[3], "D", "-", 1.8)}
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5.6))
+    style = {"markov-kmeans (auto)": (SERIES[0], "o", "-", 2.8), "markov-kmeans (t0)": (SERIES[0], "o", "--", 1.6),
+             "sklearn tol": (SERIES[1], "s", "-", 2.0), "Perez-Ortega": (SERIES[2], "^", "-", 2.0),
+             "fixed iterations": (SERIES[3], "D", "-", 2.0)}
+    label = {"markov-kmeans (auto)": "Markov-K-means, automatic", "markov-kmeans (t0)": "Markov-K-means, fixed stop + settle",
+             "sklearn tol": "scikit-learn tol", "Perez-Ortega": "Pérez-Ortega threshold", "fixed iterations": "fixed iterations"}
     for ax, reg in zip(axes, ("exact", "minibatch", "minibatch_const")):
         d = cv[cv.regime == reg]
         for fam in FAMILIES:
@@ -137,31 +142,41 @@ def figure(cv):
             col, mk, ls, lw = style[fam]
             # keep only the lower envelope: a setting that costs more for a larger error is never chosen
             env = q[q.cost <= q.cost.cummin()]
-            ax.plot(env.error * 100, env.cost, color=col, ls=ls, lw=lw, marker=mk, ms=5 if lw < 2 else 6,
-                    markeredgecolor=SURFACE, markeredgewidth=1, label=fam, zorder=4 if "auto" in fam else 3)
+            ax.plot(env.error * 100, env.cost, color=col, ls=ls, lw=lw, marker=mk, ms=5.5 if lw < 2 else 6.5,
+                    markeredgecolor=SURFACE, markeredgewidth=1, label=label[fam], zorder=4 if "auto" in fam else 3)
             if fam in DEFAULTS:
                 dq = q[np.isclose(q.param, DEFAULTS[fam])]
-                ax.scatter(dq.error * 100, dq.cost, s=170, facecolor="none", edgecolor=col, linewidth=2, zorder=5)
+                ax.scatter(dq.error * 100, dq.cost, s=190, facecolor="none", edgecolor=col, linewidth=2.2, zorder=5)
         fr = d[d.family == "full run"]
         if (fr.error > 0).all():
-            ax.scatter(fr.error * 100, fr.cost, marker="*", s=220, color=INK2, edgecolor=SURFACE, zorder=5, label="full run")
+            ax.scatter(fr.error * 100, fr.cost, marker="*", s=260, color=INK2, edgecolor=SURFACE, zorder=5)
         else:
             ax.axhline(1.0, color=GRID, lw=1.5, ls=":", zorder=1)
             ax.text(0.98, 1.0, "full run: error 0 by definition", transform=ax.get_yaxis_transform(), ha="right",
-                    va="bottom", fontsize=8, color=INK2)
-        ax.scatter([], [], s=170, facecolor="none", edgecolor=INK2, linewidth=2, label="default setting")
+                    va="bottom", fontsize=9.5, color=INK2)
         ax.set_xscale("log")
         ax.set_ylim(-0.02, 1.08)
         _style(ax, TITLE[reg], "time / full run (mean)", "labels differing from the reference (%, mean, log)")
-        ax.legend(frameon=False, fontsize=8, labelcolor=INK2, loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=3)
-    fig.tight_layout()
+        ax.title.set_fontsize(13)
+        ax.xaxis.label.set_fontsize(10.5)
+        ax.yaxis.label.set_fontsize(10.5)
+        ax.tick_params(labelsize=10)
+    h, l = axes[0].get_legend_handles_labels()
+    h += [plt.Line2D([], [], ls="none", marker="*", ms=15, color=INK2, markeredgecolor=SURFACE),
+          plt.Line2D([], [], ls="none", marker="o", ms=13, markerfacecolor="none", markeredgecolor=INK2, markeredgewidth=2)]
+    l += ["full run", "default setting"]
+    fig.legend(h, l, loc="lower center", ncol=4, frameon=False, fontsize=11, labelcolor=INK2)
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
     FIG.mkdir(parents=True, exist_ok=True)
     fig.savefig(FIG / "fig9_time_for_error.png", dpi=150)
     plt.close(fig)
 
 
-def main():
+def main(argv=()):
     plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
+    if "--plot" in argv:
+        figure(curves(pd.read_csv(RESULTS / "time_for_error.csv")))
+        return None
     warm_up()
     df = pd.concat([sweep(*inst) for inst in INSTANCES], ignore_index=True)
     df.to_csv(RESULTS / "time_for_error.csv", index=False)
@@ -175,4 +190,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
