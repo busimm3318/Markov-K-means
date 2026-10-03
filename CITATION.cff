@@ -11,8 +11,13 @@ abstract: >-
   It works on exact Lloyd (Hamerly), 1/count mini-batch and constant-step (EMA) mini-batch
   K-means, and is a scikit-learn compatible estimator.
 authors:
-  - alias: busimm3318
+  - given-names: Dongsu
+    family-names: Shim
+    affiliation: Inha University
+    orcid: "https://orcid.org/0009-0005-2255-8325"
+    alias: busimm3318
 version: 0.3.0
+date-released: "2026-10-03"
 license: Apache-2.0
 repository-code: "https://github.com/busimm3318/Markov-K-means"
 url: "https://github.com/busimm3318/Markov-K-means"
