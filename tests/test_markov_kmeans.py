@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from sklearn.exceptions import NotFittedError
 
 from kmeans_accel import datasets
 from kmeans_accel.lloyd import lloyd
@@ -93,7 +94,7 @@ def test_input_validation(blobs):
         MarkovKMeans(5000).fit(blobs)
     with pytest.raises(ValueError):
         MarkovKMeans(3, algorithm="nope").fit(blobs)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(NotFittedError):
         MarkovKMeans(3).predict(blobs)
 
 

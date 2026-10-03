@@ -4,16 +4,29 @@ from __future__ import annotations
 import time
 
 import numpy as np
+from sklearn.base import BaseEstimator, ClassNamePrefixFeaturesOutMixin, ClusterMixin, TransformerMixin
+from sklearn.utils import check_random_state
+from sklearn.utils.validation import check_is_fitted
 
 from . import _rules
 from ._engines import HamerlyEngine, LloydEngine, MiniBatchEngine
-from ._kernels import as_data, compute_centers, inertia, soft_centers
+from ._kernels import compute_centers, inertia, soft_centers
+
+try:                                    # scikit-learn >= 1.6
+    from sklearn.utils.validation import validate_data as _validate_data
+except ImportError:                     # older scikit-learn: the estimator method
+    def _validate_data(estimator, X, **kwargs):
+        return estimator._validate_data(X, **kwargs)
 
 _ALGORITHMS = ("hamerly", "lloyd", "minibatch")
 
 
-class MarkovKMeans:
+class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMixin, BaseEstimator):
     """Markov-K-means clustering.
+
+    A scikit-learn estimator (clusterer and transformer): it passes
+    ``sklearn.utils.estimator_checks.check_estimator`` and works with ``clone``,
+    ``Pipeline``, ``GridSearchCV`` and ``set_output``.
 
     The base algorithm (exact Lloyd via Hamerly bounds by default, plain Lloyd, or
     mini-batch) runs while a :class:`markov_kmeans._rules.StateMonitor` judges, after each
@@ -77,7 +90,7 @@ class MarkovKMeans:
         "auto" is "hard" for Lloyd/Hamerly and "none" for mini-batch.
     batch_size, learning_rate, eta : mini-batch settings (``learning_rate`` is
         ``"count"`` for Sculley's 1/count rule or ``"constant"`` for a fixed ``eta``).
-    random_state : int or None
+    random_state : int, RandomState instance or None
 
     Attributes
     ----------
@@ -136,17 +149,27 @@ class MarkovKMeans:
 
     # ------------------------------------------------------------------ fitting
 
-    def _initial_centers(self, X):
+    def _seed(self):
+        """An int seed (or None) for the initialisation and the mini-batch order.
+
+        Integer seeds are used as given, so results match earlier versions; a RandomState
+        instance is drawn from, as scikit-learn estimators do.
+        """
+        rs = self.random_state
+        if rs is None or isinstance(rs, (int, np.integer)):
+            return None if rs is None else int(rs)
+        return int(check_random_state(rs).randint(np.iinfo(np.int32).max))
+
+    def _initial_centers(self, X, seed):
         k = self.n_clusters
         if isinstance(self.init, str):
             if self.init == "k-means++":
                 from sklearn.cluster import kmeans_plusplus
 
-                seed = None if self.random_state is None else int(self.random_state)
                 C, _ = kmeans_plusplus(X, k, random_state=seed)
                 return C
             if self.init == "random":
-                rng = np.random.default_rng(self.random_state)
+                rng = np.random.default_rng(seed)
                 return X[rng.choice(X.shape[0], size=k, replace=False)].copy()
             raise ValueError(f"unknown init {self.init!r}")
         C = np.asarray(self.init, dtype=np.float64)
@@ -154,23 +177,28 @@ class MarkovKMeans:
             raise ValueError(f"init has shape {C.shape}, expected {(k, X.shape[1])}")
         return C
 
-    def _engine(self, X, C0):
+    def _engine(self, X, C0, seed):
         if self.algorithm == "hamerly":
             return HamerlyEngine(X, C0)
         if self.algorithm == "lloyd":
             return LloydEngine(X, C0)
         if self.algorithm == "minibatch":
-            return MiniBatchEngine(X, C0, self.batch_size, self.learning_rate, self.eta, self.random_state)
+            return MiniBatchEngine(X, C0, self.batch_size, self.learning_rate, self.eta, seed)
         raise ValueError(f"algorithm must be one of {_ALGORITHMS}")
 
     def fit(self, X, y=None):
+        """Cluster X (array-like of shape (n_samples, n_features)); ``y`` is ignored."""
         t_start = time.perf_counter()
-        X = as_data(X)
+        X = _validate_data(self, X, dtype=np.float64, order="C")
         n, k, W = X.shape[0], self.n_clusters, int(self.window)
-        if not 1 <= k <= n:
-            raise ValueError("need 1 <= n_clusters <= n_samples")
+        if not isinstance(k, (int, np.integer)) or k < 1:
+            raise ValueError(f"n_clusters must be a positive integer, got {k!r}")
+        if k > n:
+            raise ValueError(f"n_samples={n} should be >= n_clusters={k}.")
         if W < 1:
             raise ValueError("window must be >= 1")
+        if self.algorithm not in _ALGORITHMS:
+            raise ValueError(f"algorithm must be one of {_ALGORITHMS}")
         if self.stop_rule not in _rules.STOP_RULES:
             raise ValueError(f"stop_rule must be one of {_rules.STOP_RULES}")
         if self.assign_rule not in _rules.ASSIGN_RULES:
@@ -181,7 +209,8 @@ class MarkovKMeans:
             change_tol=self.change_tol, center_tol=self.center_tol, center_noise_tol=self.center_noise_tol,
             travel_ratio=self.travel_ratio, cluster_tol=self.cluster_tol, size_tol=self.size_tol,
             flow_tol=self.flow_tol)
-        engine = self._engine(X, self._initial_centers(X))
+        seed = self._seed()
+        engine = self._engine(X, self._initial_centers(X, seed), seed)
         monitor = _rules.StateMonitor(n, k, params, exact=engine.exact, rule=self.stop_rule)
         monitor.push(engine.labels, engine.centers)
 
@@ -255,7 +284,6 @@ class MarkovKMeans:
         self.unstable_fraction_ = len(U) / n
         self.inertia_ = float(inertia(X, centers, labels))
         self.n_dist_ = int(engine.n_dist)
-        self.n_features_in_ = X.shape[1]
         self._n = n
         self._membership = None
         self.fit_seconds_ = time.perf_counter() - t_start
@@ -281,14 +309,20 @@ class MarkovKMeans:
             self._membership = sparse.csr_matrix((vals, (rows, cols)), shape=(n, k))
         return self._membership
 
-    def _check_fitted(self):
-        if not hasattr(self, "cluster_centers_"):
-            raise RuntimeError("call fit first")
+    @property
+    def _n_features_out(self):
+        """Number of transformed output features (one distance per center)."""
+        return self.cluster_centers_.shape[0]
+
+    def _check_input(self, X):
+        check_is_fitted(self)
+        return _validate_data(self, X, dtype=np.float64, order="C", reset=False)
 
     def transform(self, X, chunk=65536):
-        """Euclidean distance of each row of X to each center."""
-        self._check_fitted()
-        X = as_data(X)
+        """Euclidean distance of each row of X to each center, shape (n_samples, n_clusters)."""
+        return self._distances(self._check_input(X), chunk)
+
+    def _distances(self, X, chunk=65536):
         C = self.cluster_centers_
         c_sq = np.einsum("ij,ij->i", C, C)
         out = np.empty((X.shape[0], C.shape[0]))
@@ -303,21 +337,13 @@ class MarkovKMeans:
 
     def predict(self, X, chunk=65536):
         """Nearest learned center for new points (no label history, so no Markov step)."""
-        self._check_fitted()
-        X = as_data(X)
+        X = self._check_input(X)
         out = np.empty(X.shape[0], dtype=np.int64)
         for s in range(0, X.shape[0], chunk):
-            out[s:s + chunk] = self.transform(X[s:s + chunk]).argmin(1)
+            out[s:s + chunk] = self._distances(X[s:s + chunk], chunk).argmin(1)
         return out
-
-    def fit_predict(self, X, y=None):
-        return self.fit(X).labels_
 
     def score(self, X, y=None):
         """Negative SSE of X to its nearest learned center (scikit-learn convention)."""
-        D = self.transform(X)
+        D = self._distances(self._check_input(X))
         return -float((D.min(1) ** 2).sum())
-
-    def __repr__(self):
-        return (f"MarkovKMeans(n_clusters={self.n_clusters}, algorithm={self.algorithm!r}, "
-                f"t0={self.t0}, unstable_tol={self.unstable_tol}, window={self.window})")

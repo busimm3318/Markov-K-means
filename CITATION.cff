@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Markov-K-means: stopping K-means on its unstable tail and settling the last points from their label histories"
+abstract: >-
+  Markov-K-means watches the state of a K-means run (how many points still change cluster,
+  whether the centers travel or only jitter, whether the clusters reorganise or only swap
+  members), stops once only a few boundary points are still changing, and settles those
+  points from their own label history: a point that moved and stayed keeps its new cluster,
+  a point that keeps switching gets its share of time in each cluster as a soft membership.
+  It works on exact Lloyd (Hamerly), 1/count mini-batch and constant-step (EMA) mini-batch
+  K-means, and is a scikit-learn compatible estimator.
+authors:
+  - alias: busimm3318
+version: 0.3.0
+license: Apache-2.0
+repository-code: "https://github.com/busimm3318/Markov-K-means"
+url: "https://github.com/busimm3318/Markov-K-means"
+repository-artifact: "https://pypi.org/project/markov-kmeans/"
+keywords:
+  - k-means
+  - clustering
+  - early stopping
+  - mini-batch k-means
+  - vector quantization
+  - markov chain
+  - soft clustering
+  - scikit-learn

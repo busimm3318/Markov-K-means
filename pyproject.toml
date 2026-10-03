@@ -12,9 +12,9 @@ license-files = ["LICENSE"]
 authors = [{ name = "busimm3318" }]
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24", "scipy>=1.10", "numba>=0.59", "scikit-learn>=1.3"]
-keywords = ["k-means", "clustering", "markov chain", "soft clustering", "early stopping", "mini-batch k-means"]
+keywords = ["k-means", "clustering", "markov chain", "soft clustering", "early stopping", "mini-batch k-means", "scikit-learn"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Science/Research",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
