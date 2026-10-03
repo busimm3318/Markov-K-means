@@ -1054,6 +1054,8 @@ pip install -e .[dev]
 ./experiments/run_markov_tail.sh highdim       # d=128, N=2e6
 ./experiments/run_markov_tail.sh extreme       # N=3e7 (메모리 약 10 GB, 단독 실행)
 python -m experiments.auto_rule                # 자동 판단 규칙 평가 (N=1e6, 10개 사례)
+python -m experiments.pareto                   # 6.3절 비용·오차 동시 비교
+python -m experiments.time_for_error           # 6.4절 목표 오차별 시간 (--plot: CSV로 그림만 다시 그림)
 ./experiments/run_applications.sh              # 색 양자화, VQ 코드북 (사진 100장 내려받음)
 python -m experiments.analyze_markov_tail      # 1–5절 그림·표
 python -m experiments.analyze_applications     # 6–8절 그림·표

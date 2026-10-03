@@ -1,5 +1,7 @@
 # Markov-K-means
 
+K-means that stops once the only work left is a handful of boundary points changing cluster, and settles those points from their own label history.
+
 [English](#english) · [한국어](#한국어)
 
 ```bash
@@ -10,93 +12,112 @@ pip install markov-kmeans
 from markov_kmeans import MarkovKMeans
 
 mk = MarkovKMeans(n_clusters=50, random_state=0).fit(X)
-mk.labels_              # final hard labels
-mk.cluster_centers_     # centers
-mk.stop_reason_         # converged / few_unstable / stable_drift / oscillation / t0 / max_iter
-mk.regime_              # "drift" or "oscillation": how the last moving points behaved
-mk.membership_          # (n, k) sparse memberships: one-hot for stable points,
-                        # a distribution over clusters for the few unstable ones
-mk.unstable_indices_    # the points settled from their label histories
-mk.uncertainty_         # 1 - max probability of each of them
-mk.decision_trace_      # the state judged at every iteration
+mk.labels_                    # hard labels
+mk.cluster_centers_           # centers
+mk.unstable_indices_          # points still undecided when the run stopped
+mk.membership_                # sparse (n, k): one-hot for settled points, a distribution for undecided ones
+mk.stop_reason_, mk.regime_   # why it stopped; "drift" or "oscillation"
 ```
 
 ---
 
 ## English
 
-**Markov-K-means** is a K-means variant for the long tail of convergence. It watches the state of the whole run and stops once only a few points still change cluster while the representatives and the partition are stable. Each remaining point is then settled from **its own label history**:
-* a point that moved once and stayed is absorbed in its new cluster: the long-run law of the Markov chain of its labels;
-* a point that keeps alternating between clusters gets its occupancy, e.g. `[0.5, 0.5]`.
+### What it does
 
-The hard label is the most likely cluster; the soft membership is the whole distribution.
+In a long K-means run, most iterations are spent moving a few points near cluster boundaries, long after everything else has settled. Markov-K-means keeps a short label history for every point and watches three things during the run:
 
-### How it works
+- how many points still change cluster;
+- whether the centers are still travelling or only jittering in place;
+- whether the clusters are still reorganising or only exchanging members back and forth.
 
-1. A base algorithm runs while the last `window + 1` labels of every point are kept in a ring buffer (n × (W+1), uint8 or uint16). Choices:
-   * `"hamerly"` (default): exact Lloyd iterates with Hamerly bounds
-   * `"lloyd"`
-   * `"minibatch"`: Sculley's mini-batch, with a 1/count or constant step (a constant step behaves like an EMA-trained VQ codebook)
-2. After every iteration a state monitor judges the whole run (`stop_rule="auto"`):
+Once all three are quiet, it stops and settles the points that were still changing:
 
-   | group | signals | stable when |
-   |---|---|---|
-   | movement | share of points that changed within the last `window` iterations (the unstable set U); share of U that switched twice or more; changes still to come, extrapolated from the decay of the change counts | U ≤ `max_unstable` |
-   | representatives | largest center move relative to half the distance to the nearest other center; `center_travel`, displacement over the window ÷ mean one-step move (≈1 for jitter around fixed points, ≈W for a drift) | moves ≤ `center_tol`, or at a noise floor ≤ `center_noise_tol` with `center_travel` ≤ `travel_ratio` |
-   | partitions | relative change of cluster sizes; share of a cluster's members moving; `net_flow`, net ÷ gross transfers between cluster pairs (0 when moves balance out) | sizes steady and few members moving, or moves balanced |
+- a point that moved once and stayed keeps its new cluster;
+- a point that keeps alternating gets the share of time it spent in each cluster as its soft membership, and the cluster it occupies most as its hard label.
 
-   The Markov step intervenes when U is small and representatives and partitions are stable:
-   * `oscillation`: the points of U keep switching and their number no longer falls
-   * `stable_drift`: the changes still to come are negligible
-   * `few_unstable`: |U|/n ≤ `unstable_tol`
-   * the run also stops on convergence, at `t0`, or at `max_iter`
-3. The points of U are settled according to the diagnosed regime (`assign_rule="auto"`):
-   * drift: a point that switched once keeps its label, a point that oscillated gets its window occupancy
-   * oscillation: every point gets its window occupancy
+### Time versus error, compared with other stopping rules
 
-   `assign_rule="markov"` uses the long-run law of each point's label Markov chain for every point. It is optionally smoothed by `alpha`, or shrunk towards the pooled moves by `pooled_prior`.
-4. Centers are updated by `center_update`: `"hard"`, `"soft"` (membership-weighted) or `"none"`.
+![Time needed for a target error, per stopping rule](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/fig9_time_for_error.png)
 
-The 0.1.0 behaviour is `stop_rule="unstable", assign_rule="markov"`.
+Each line is one way of deciding when to stop:
 
-The Markov step alone also works on label histories from any iterative clustering:
+- Markov-K-means with its automatic rule;
+- Markov-K-means stopped at a fixed iteration, then settled;
+- scikit-learn's tolerance on center movement;
+- the changed-labels threshold of Pérez-Ortega et al.;
+- a fixed number of iterations.
+
+Each procedure's own setting is swept, and every setting is applied unchanged to all datasets of a panel, as a user would choose it without knowing the outcome. A point gives the resulting average error (share of labels that differ from the reference partition) and the average time relative to running to the end. Lower and further left is better. Circles mark the default settings.
+
+**Constant step or EMA (right).** This is where Markov-K-means pays off most. The centers never stop jittering, so boundary points flip forever and running longer does not reduce the error. The other rules cannot recognise this state:
+
+- the center-tolerance rule, at its default, waits for a stillness that never comes and runs to the end;
+- the changed-labels rule stops either too early or too late;
+- a fixed budget picks an arbitrary moment of the oscillation.
+
+Markov-K-means recognises the oscillation as stationary, stops, and gives each oscillating point the cluster it occupies most. Its curves lie under all others, and only its settlement reaches errors lower than the full run's.
+
+**1/count mini-batch (middle).** As the step shrinks, points drift and then settle, so all procedures follow nearly the same curve. The automatic rule must first observe a full window of epochs. For a rough answer, a short fixed run is therefore cheaper. For a precise answer, the automatic rule is among the fastest.
+
+**Exact Lloyd or Hamerly (left).** Again all adaptive rules lie on one curve: fewer changed labels and smaller center moves amount to the same thing here. A threshold tuned for the data is slightly faster, because Markov-K-means pays for monitoring and for its observation window. In return, its default lands at a low error without tuning, while the defaults of the other rules are scattered along the curve. It also returns the list of points that were still undecided.
+
+In short, each unit of error costs Markov-K-means the least time under oscillating training. Under drift it costs the same as the other rules, and on exact Lloyd slightly more than a well-tuned threshold.
+
+### Where it applies
+
+- **Built-in base algorithms:**
+  - `algorithm="hamerly"`: exact Lloyd with Hamerly bounds (the default);
+  - `algorithm="lloyd"`;
+  - `algorithm="minibatch"` with `learning_rate="count"`: Sculley's 1/count step, as in scikit-learn's `MiniBatchKMeans`;
+  - `algorithm="minibatch"` with `learning_rate="constant"`: a fixed step, the same update as an EMA-trained codebook.
+- **Any other iterative hard-assignment procedure.** Record the labels at each step and pass the history to `assign_from_history`. This covers online or streaming k-means, VQ codebook training, and k-medoids or k-modes style reassignment.
 
 ```python
 from markov_kmeans import assign_from_history
 
-r = assign_from_history(history)        # history: (n_steps, m), oldest first
+r = assign_from_history(history)        # history: (n_steps, n_points), oldest first
 r.labels, r.dense(n_clusters), r.uncertainty
 ```
 
-### What the evaluation found
+### When it helps
 
-Full report: [docs/results.md](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md).
+- **Large data with a long convergence tail.** Each pass over the data is expensive, and the run spends many passes moving a few boundary points. The automatic rule cuts the tail without a threshold to tune. The answer differs from the converged one only on a small set of boundary points.
+- **Constant-step, EMA or online training.** No other stopping rule knows when such a run is done, and no amount of extra training fixes the boundary points. Markov-K-means stops at the right time. Its labels are more accurate than the run's last state, and its memberships reflect how much time each point spends in each cluster.
+- **You need to know which points are uncertain.** The undecided points come out as a list with soft memberships. You can send them to human review, to a more expensive model, or to a downstream step that accepts soft assignments.
+- **One setting must work across datasets.** The good threshold of other rules depends on the data. The defaults of Markov-K-means stay near the best trade-off whether the run drifts or oscillates.
 
-**Synthetic instances:**
-* n = 10⁷ (also d = 128, and n = 3×10⁷)
-* each needs ≥ 100 iterations to converge
-* at every cut-off T₀ = 10, 20, …, 90, all methods start from the same state
+### When it hurts
 
-**Findings:**
-* **Compute.** Stopping when few points move saves 81–98% of distance evaluations versus running Lloyd to convergence. Against Hamerly-accelerated Lloyd it saves 52–68% of time (73–84% at n = 3×10⁷). The saving comes from *stopping*; the Markov step costs about one Hamerly iteration.
-* **Cost and error together.** Compared as complete procedures on the same runs (scikit-learn's tolerance rule, the changed-labels rule of Pérez-Ortega et al., fixed iteration counts, running to the end), no alternative is both cheaper and more accurate than Markov-K-means on any of the 10 instances. Under drift it stops within 0–5% of the hindsight-optimal time for its error, with the most consistent error (≤ 0.62%). Under persistent oscillation its settlement reaches cost–error points that no stop-and-keep rule reaches.
-* **Time for a target error** (each procedure's own setting swept). Under persistent oscillation Markov-K-means is the fastest at every target, and it is the only procedure that reaches errors below the full run's. Under drift, tuned threshold rules (Pérez-Ortega, scikit-learn tol) reach the same error 3–6%p of the full run's time sooner.
-* **Accuracy.**
-  * After a drift (exact Lloyd, 1/count mini-batch), Markov settlement is as good as keeping the current labels. It avoids the failure of majority voting, which pulls points that already moved back to their old cluster (43–53% wrong).
-  * Over 90% of the remaining error comes from points that look stable at T₀ and move later.
-  * In a persistent oscillation (constant-step mini-batch), occupancy and Markov settlement beat keeping the current label (11–21% vs 23–30% wrong in U).
-* **Soft reading.**
-  * After a drift, fractional memberships are rare (0.2–9% of U) and mean "not yet decided": such points almost always end in one cluster. As a flag for points that will be wrong, they beat a GMM posterior in mini-batch runs (AUROC 0.71–0.98 vs 0.60–0.75).
-  * In a persistent oscillation, 80% of these points really keep alternating, and π is calibrated to their long-run share (0.55 → 0.53, 0.85 → 0.83). Plain window frequency is as good.
-* **Automatic rule (n = 10⁶, 10 instances).**
-  * It uses 6–83% of the full run's time at an error of 0.05–0.62%.
-  * With a constant step, scikit-learn's tolerance rule never stops; the automatic rule stops at 10–62% with an error close to the full run's.
+- **Small or easy data.** If K-means converges quickly anyway, the monitor and the observation window are pure overhead, and the run is slightly slower than plain K-means.
+- **Exact Lloyd with an already-tuned threshold.** A stopping threshold tuned for this kind of data is slightly cheaper for the same error.
+- **Only aggregate quality matters.** Examples are colour palettes, inertia and compression quality. The aggregate is stable long before individual boundary points settle, and the automatic rule waits for the points, so it is conservative here. Fitting on a sample, or a short fixed run, is cheaper.
+- **Codebooks that jitter strongly.** Codes may move a large part of the distance between neighbouring codes, as is common for EMA-trained VQ codebooks in image tokenizers. The rule then correctly declines to intervene, so monitoring costs time and saves nothing. For soft tokens, distance-based assignments are better than history-based ones there.
+- **You need the exact converged partition.** For bit-exact reproducibility or comparison against a reference run, do not stop early.
+- **A rough answer from 1/count mini-batch.** A short fixed number of epochs is cheaper than waiting for the observation window.
 
-* **Applications.**
-  * Colour quantization of 100 photos (2–21 MP): image quality is within 0.01 dB of the converged result after about a third of the iterations. The automatic rule is safe there (≤ 0.002 dB lost) but conservative (79–84% of the time); fitting the palette on a sample is cheapest.
-  * EMA VQ codebooks (MobileNetV2 latents, pixel patches; the image-tokenizer setting): 5–26% of the vectors keep switching codes and the codes jitter by up to 60% of their spacing. The rule correctly declines to intervene, and distance-based soft tokens beat history-based ones.
+### Limits
 
-Use Markov-K-means as a principled stopping rule plus an uncertainty flag (or, under persistent oscillation, a soft membership) for the last unstable points. It is not an accuracy improvement over a converged run.
+- The rule only sees what has happened so far. A point that looks settled when the run stops but would move later is not caught, and most of the error left after a drift comes from such points. A smaller `unstable_tol` stops later and leaves fewer of them.
+- Under drift, the gain comes from stopping; settlement keeps the labels the run already has. Accuracy beyond the run's own end comes only under oscillation.
+- A fractional membership means two different things. After a drift it means "still undecided"; under oscillation it means "really shared". `regime_` tells which.
+- New points get the nearest center from `predict`, since they have no history.
+
+### How it works
+
+1. The base algorithm runs. The last `window + 1` labels of every point are kept in a ring buffer.
+2. After every iteration the monitor judges the whole run. Cheap checks run first; expensive ones run only when needed.
+   - **Movement:** the share of points that changed within the window, and whether they switch back and forth.
+   - **Representatives:** whether the centers travel or only jitter in place.
+   - **Partitions:** whether cluster sizes change, and whether members flow one way or are exchanged.
+3. When all are quiet, the run stops and the regime is named:
+   - `drift`: points moved and are settling;
+   - `oscillation`: points keep switching and their number no longer falls.
+4. The undecided points are settled according to the regime:
+   - under drift, a point that moved once keeps its label and an oscillating point gets its occupancy;
+   - under oscillation, every point gets its occupancy.
+
+   `assign_rule="markov"` instead uses the long-run law of each point's label Markov chain.
 
 ### Main parameters
 
@@ -104,99 +125,146 @@ Use Markov-K-means as a principled stopping rule plus an uncertainty flag (or, u
 |---|---|---|
 | `n_clusters` | 8 | number of clusters |
 | `algorithm` | `"hamerly"` | `"hamerly"`, `"lloyd"`, `"minibatch"` |
-| `init` | `"k-means++"` | `"k-means++"`, `"random"` or a (k, d) array |
-| `stop_rule` | `"auto"` | `"auto"` (judge the state) or `"unstable"` (only `unstable_tol`, as in 0.1.0) |
+| `learning_rate`, `eta`, `batch_size` | `"count"`, 2e-4, 4096 | mini-batch step: `"count"` (1/count) or `"constant"` (fixed `eta`) |
+| `stop_rule` | `"auto"` | `"auto"` judges the state; `"unstable"` looks only at the share of changing points |
 | `assign_rule` | `"auto"` | `"auto"` (by regime), `"markov"`, `"frequency"`, `"keep"` |
-| `t0` | `None` | fixed stopping iteration (overrides `stop_rule`) |
-| `unstable_tol`, `max_unstable` | 1e-3, 0.2 | stop once \|U\|/n ≤ `unstable_tol`; never intervene above `max_unstable` |
-| `osc_share`, `plateau_ratio`, `change_tol` | 0.3, 0.8, 1e-3 | oscillation share, plateau test of the change counts, projected changes |
-| `center_tol`, `center_noise_tol`, `travel_ratio` | 0.01, 0.25, 2 | representative stability |
-| `cluster_tol`, `size_tol`, `flow_tol` | 0.1, 0.02, 0.1 | partition stability |
+| `t0` | `None` | stop at this iteration instead, then settle |
+| `unstable_tol` | 1e-3 | lower stops later and leaves fewer undecided points |
+| `window` | 10 | iterations of label history kept per point |
 | `min_iter`, `max_iter` | 10, 300 | iteration bounds |
-| `window` | 10 | label window W |
-| `alpha`, `pooled_prior` | 0.0, 0.0 | Markov rule: transition smoothing, pooled empirical-Bayes prior |
-| `center_update` | `"auto"` | `"hard"`, `"soft"`, `"none"` (auto: hard for Lloyd/Hamerly, none for mini-batch) |
-| `batch_size`, `learning_rate`, `eta` | 4096, `"count"`, 2e-4 | mini-batch settings |
+| `center_update` | `"auto"` | final centers: `"hard"`, `"soft"` (membership-weighted), `"none"` |
 
-Diagnostics: `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `oscillating_share_`, `change_counts_`, `center_drift_`, `n_dist_` (point–center distance evaluations), `fit_seconds_`, `labels_at_stop_`. `predict`, `transform`, `fit_predict` and `score` follow scikit-learn; `predict` returns the nearest center, because new points have no label history.
+The monitor's other thresholds are documented in the docstring; the evaluation used their defaults. Diagnostics include `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_` and `labels_at_stop_`. `predict`, `transform`, `fit_predict` and `score` follow scikit-learn.
+
+### Further reading
+
+- [Evaluation report](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md): methods, every number behind the figure, colour quantization and VQ codebook studies
+- [Prior work](https://github.com/busimm3318/Markov-K-means/blob/main/docs/literature_review.md)
+- [Quick start](https://github.com/busimm3318/Markov-K-means/blob/main/examples/quickstart.py)
 
 ---
 
 ## 한국어
 
-**Markov-K-means**는 K-means의 긴 수렴 꼬리를 줄이는 변형이에요. 전체 실행 상태를 지켜보다가, 군집 주소가 아직 바뀌는 점이 극소수만 남고 대표점과 분할이 안정되면 반복을 멈춰요. 남은 점은 **각자의 라벨 이력**으로 편입해요.
-* 한 번 옮겨 가서 머문 점: 라벨 Markov 연쇄의 장기 분포에 따라 새 군집에 흡수
-* 두 군집을 계속 오가는 점: 창 안 점유율, 예: `[0.5, 0.5]`
+### 무엇을 하는가
 
-hard 라벨은 확률이 가장 큰 군집이고, soft 소속도는 그 분포 전체예요.
+K-means를 오래 돌리면 반복의 대부분이 군집 경계의 소수 점을 옮기는 데 쓰인다. 나머지 점들은 이미 오래전에 자리를 잡은 상태다. Markov-K-means는 모든 점의 최근 라벨 이력을 짧게 기록하면서, 실행 중 세 가지를 지켜본다.
 
-### 설치
+- 아직 군집을 바꾸는 점이 얼마나 남았는가
+- 대표점이 아직 이동 중인가, 아니면 제자리에서 흔들리기만 하는가
+- 군집이 재편되는 중인가, 아니면 구성원을 서로 주고받기만 하는가
 
-```bash
-pip install markov-kmeans
-# 개발판: pip install "git+https://github.com/busimm3318/Markov-K-means"
+셋이 모두 잠잠해지면 멈추고, 아직 바뀌던 점들을 각자의 이력으로 정리한다.
+
+- 한 번 옮겨 가서 머문 점은 새 군집에 둔다.
+- 계속 오가는 점은 각 군집에 머문 시간의 비율을 soft 소속도로, 가장 오래 머문 군집을 hard 라벨로 받는다.
+
+### 다른 정지 규칙과 비교한 시간–오차 교환
+
+![정지 규칙별 목표 오차에 드는 시간](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/fig9_time_for_error.png)
+
+선 하나가 "언제 멈출지 정하는 방법" 하나다.
+
+- Markov-K-means 자동 규칙
+- 정해진 반복에서 멈춘 뒤 이력으로 정리하는 Markov-K-means
+- 대표점 이동량으로 멈추는 scikit-learn의 tol
+- 라벨이 바뀐 점의 비율로 멈추는 Pérez-Ortega 등의 규칙
+- 고정 반복 수
+
+각 방법의 설정값을 바꿔 가며 돌렸고, 설정 하나는 한 패널의 모든 데이터에 그대로 적용했다. 결과를 모르는 사용자가 설정을 고르는 상황을 그대로 재현한 것이다. 점의 위치는 그 설정의 평균 오차(기준 분할과 라벨이 다른 점의 비율)와 평균 시간(끝까지 돌린 시간 대비)이다. 아래·왼쪽일수록 같은 오차를 더 빨리 얻는다. 동그라미는 각 방법의 기본 설정이다.
+
+**고정 학습률 또는 EMA (오른쪽).** Markov-K-means가 가장 큰 차이를 내는 경우다. 대표점이 끝까지 흔들리므로 경계 점들은 영원히 오가고, 더 오래 돌려도 오차가 줄지 않는다. 다른 규칙들은 이 상태를 알아보지 못한다.
+
+- 대표점 이동량 규칙은 기본값에서 오지 않을 정지 상태를 기다리다 끝까지 돈다.
+- 바뀐 라벨 비율 규칙은 너무 이르거나 너무 늦게 멈춘다.
+- 고정 반복 수는 진동 중 아무 순간이나 집어 온다.
+
+Markov-K-means는 이 진동이 더 줄지 않는 정상 상태임을 알아보고 멈춘 뒤, 오가는 점마다 가장 오래 머문 군집을 준다. 곡선이 다른 모든 방법보다 아래에 있고, 끝까지 돌린 결과보다 낮은 오차에 닿는 것은 이 정리뿐이다.
+
+**1/count mini-batch (가운데).** 보폭이 줄면서 점들이 옮겨 갔다가 자리를 잡으므로, 모든 방법이 거의 같은 곡선 위에 놓인다. 자동 규칙은 먼저 관찰 창 동안 지켜봐야 한다. 그래서 대략적인 답만 필요하면 짧은 고정 반복이 더 싸다. 정밀한 답이 필요하면 자동 규칙이 가장 빠른 축에 든다.
+
+**exact Lloyd 또는 Hamerly (왼쪽).** 여기서도 적응형 규칙들이 한 곡선 위에 있다. 바뀐 라벨이 줄어드는 것과 대표점 이동이 작아지는 것이 사실상 같은 일이기 때문이다. Markov-K-means는 감시 비용과 관찰 창 비용을 치르므로, 데이터에 맞게 조정한 임계값 규칙이 조금 더 빠르다. 대신 Markov-K-means는 조정 없이 기본값만으로 낮은 오차 쪽에 자리 잡는다. 다른 규칙의 기본값은 곡선 여기저기에 흩어져 있다. 또 끝까지 미결정이던 점의 목록도 함께 준다.
+
+정리하면, 오차 한 단위를 줄이는 데 드는 시간은 진동하는 학습에서 Markov-K-means가 가장 적다. 표류 후 정착하는 학습에서는 다른 규칙과 같고, exact Lloyd에서 잘 조정된 임계값과 비교하면 조금 더 든다.
+
+### 적용 가능한 알고리즘
+
+- **내장 기반 알고리즘**
+  - `algorithm="hamerly"`: Hamerly 경계를 쓰는 exact Lloyd (기본값)
+  - `algorithm="lloyd"`
+  - `algorithm="minibatch"`, `learning_rate="count"`: Sculley의 1/count 보폭. scikit-learn `MiniBatchKMeans`와 같은 방식이다.
+  - `algorithm="minibatch"`, `learning_rate="constant"`: 고정 보폭. EMA로 학습하는 코드북과 같은 갱신이다.
+- **그 밖의 반복형 hard 배정 절차 전반.** 매 단계의 라벨을 기록해 `assign_from_history`에 넘기면 된다. 온라인·스트리밍 k-means, VQ 코드북 학습, k-medoids·k-modes처럼 재배정을 반복하는 방법이 여기에 해당한다.
+
+```python
+from markov_kmeans import assign_from_history
+
+r = assign_from_history(history)        # history: (단계 수, 점 수), 오래된 단계부터
+r.labels, r.dense(n_clusters), r.uncertainty
 ```
 
-의존성은 NumPy, SciPy, numba, scikit-learn이에요.
+### 이럴 때 쓰면 좋다
 
-### 알고리즘
+- **수렴 꼬리가 긴 대용량 데이터.** 데이터를 한 번 훑는 비용이 크고, 경계의 소수 점을 옮기느라 반복이 길어지는 경우다. 자동 규칙이 임계값 조정 없이 꼬리를 끊어 준다. 결과는 수렴한 결과와 경계의 소수 점에서만 다르다.
+- **고정 학습률, EMA, 온라인 학습.** 다른 정지 규칙은 이런 학습이 언제 끝난 것인지 알지 못하고, 학습을 더 해도 경계 점은 바로잡히지 않는다. Markov-K-means는 적절한 시점에 멈춘다. 라벨은 마지막 상태보다 정확하고, 소속도는 각 점이 군집별로 머문 시간의 비율을 나타낸다.
+- **어떤 점이 불확실한지 알아야 할 때.** 미결정 점이 soft 소속도와 함께 목록으로 나온다. 이 점들을 사람 검토, 더 비싼 모델, soft 배정을 받는 후속 단계로 바로 넘길 수 있다.
+- **설정 하나로 여러 데이터를 처리해야 할 때.** 다른 규칙은 좋은 임계값이 데이터마다 달라진다. Markov-K-means의 기본값은 표류든 진동이든 최적 교환선 가까이에 놓인다.
 
-1. 기반 알고리즘을 돌리면서 모든 점의 최근 `window + 1`개 라벨을 링 버퍼에 저장한다.
-   * `"hamerly"`(기본): Lloyd와 결과가 같은 정확 가속법
-   * `"lloyd"`
-   * `"minibatch"`: 1/count 또는 상수 스텝. 상수 스텝은 EMA로 학습하는 VQ 코드북과 같은 구조다.
-2. 매 반복 뒤 전체 상태를 판정한다(`stop_rule="auto"`).
-   * **움직임:** 최근 `window`회 안에 라벨이 바뀐 점(비수렴 집합 U)의 비율, 그중 진동하는 점의 비율, 앞으로 남은 변경 수
-   * **대표점:** 이동 거리 ÷ 가장 가까운 다른 대표점까지 거리의 절반. 그리고 `center_travel`(창 전체 변위 ÷ 평균 한 걸음)로 "제자리 흔들림"과 "표류"를 구분한다.
-   * **분할:** 군집 크기 변화, 움직이는 구성원 비율, 그리고 `net_flow`(군집 쌍 사이 순 이동 ÷ 총 이동)로 "오가는 이동"과 "재편"을 구분한다.
-3. U가 작고 대표점과 분할이 안정하면 Markov 단계가 개입한다.
-   * `oscillation`: U의 점들이 계속 오가고 그 수가 더 줄지 않음
-   * `stable_drift`: 남은 변경이 무시할 만함
-   * `few_unstable`: \|U\|/N ≤ `unstable_tol`
-   * 그 밖에 수렴, `t0`, `max_iter`에서도 멈춘다.
-4. U의 점은 진단된 체제에 따라 편입한다(`assign_rule="auto"`).
-   * 표류: 한 번만 바뀐 점은 현재 라벨 유지, 진동한 점은 점유율
-   * 진동: 모든 점을 점유율로
-5. 대표점은 `center_update`(`"hard"` / `"soft"` / `"none"`)로 갱신한다.
+### 이럴 때는 오히려 독이 된다
 
-0.1.0 동작은 `stop_rule="unstable", assign_rule="markov"`로 쓸 수 있어요. `assign_from_history`로 Markov 편입만 따로 쓸 수도 있어요. 다른 반복형 군집 알고리즘의 라벨 이력에도 적용돼요. 전체 예제는 [`examples/quickstart.py`](https://github.com/busimm3318/Markov-K-means/blob/main/examples/quickstart.py)에 있어요.
+- **작거나 쉬운 데이터.** 어차피 빨리 수렴한다면 감시와 관찰 창은 순수한 추가 비용이 되고, 그냥 K-means보다 약간 느려진다.
+- **임계값을 이미 조정해 둔 exact Lloyd.** 같은 종류의 데이터에 맞춘 정지 임계값이 있다면 같은 오차를 그쪽이 조금 더 싸게 얻는다.
+- **전체 품질만 중요할 때.** 색 팔레트, inertia, 압축 화질 같은 경우다. 이런 집계 지표는 경계 점들이 자리 잡기 훨씬 전에 이미 안정된다. 자동 규칙은 점 하나하나가 자리 잡기를 기다리므로 여기서는 보수적이다. 표본으로 학습하거나 짧게 고정 반복하는 편이 싸다.
+- **크게 흔들리는 코드북.** 코드가 이웃 코드와의 거리 중 상당 부분만큼 움직일 수 있다. 이미지 토크나이저의 EMA VQ 코드북이 흔히 그렇다. 이때는 규칙이 개입하지 않는 것이 옳은 판단이므로, 감시 비용만 들고 절감은 없다. soft 토큰이 필요하면 이력 기반보다 거리 기반 배정이 낫다.
+- **정확히 수렴한 분할이 필요할 때.** 비트 단위 재현이나 기준 실행과의 대조가 목적이면 일찍 멈추면 안 된다.
+- **1/count mini-batch로 대략적인 답만 필요할 때.** 관찰 창을 기다리는 것보다 짧은 고정 epoch가 싸다.
 
-### 검증 결과 요약
+### 한계
 
-수렴까지 100회 이상 걸리는 합성 사례(N=10⁷, d=128, N=3×10⁷)에서 T₀=10, 20, …, 90마다 같은 상태에서 비교했어요. 자세한 내용은 [docs/results.md](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md)와 [HTML 보고서](https://github.com/busimm3318/Markov-K-means/blob/main/docs/report.html)에 있어요.
+- 판단은 지금까지 관찰한 것만으로 내린다. 멈출 때 자리 잡은 듯 보였다가 나중에 옮겨 갈 점은 잡지 못하고, 표류 뒤 남는 오차는 대부분 이런 점에서 나온다. `unstable_tol`을 낮추면 더 늦게 멈추는 대신 이런 점이 줄어든다.
+- 표류 체제에서는 이득이 멈춤에서 나오고, 정리 단계는 이미 가진 라벨을 지킨다. 실행을 끝까지 돌린 결과보다 정확해지는 것은 진동 체제에서다.
+- 분수형 소속도는 두 가지 뜻이 있다. 표류 뒤에는 "아직 미결정"이고, 진동 중에는 "실제로 나눠 가짐"이다. `regime_`으로 구분한다.
+- 새 점은 이력이 없으므로 `predict`가 가장 가까운 대표점을 준다.
 
-| 질문 | 결과 |
-|---|---|
-| 계산량 | Lloyd를 끝까지 돌리는 것보다 거리 계산을 81–98% 줄인다. Hamerly 대비 시간 52–68%(N=3×10⁷에서 73–84%)를 줄인다. 절감은 **멈춤**에서 나오고, Markov 편입은 Hamerly 반복 약 1회 비용만 더한다. |
-| 오차 | 표류 체제에서 Markov 편입은 "현재 라벨 유지"와 같은 수준이고, 다수결의 함정(이미 옮긴 점을 되돌림, 43–53% 오류)을 피한다. 남은 오차의 90% 이상은 U 밖에서 나온다. 영구 진동 체제에서는 점유율·Markov 편입이 유지보다 낫다(U 오류 11–21% 대 23–30%). |
-| 연속 해석 | 표류 체제에서 분수형 π는 드물고(U의 0.2–9%) "아직 미결정"의 신호다. mini-batch에서는 틀릴 점 탐지에서 GMM 사후보다 낫다(AUROC 0.71–0.98 대 0.60–0.75). 영구 진동 체제에서는 그런 점의 80%가 실제로 계속 오가고, π가 장기 점유율에 맞게 보정돼 있다(0.55→0.53, 0.85→0.83). |
-| 응용 | 색 양자화(사진 100장)에서는 반복의 약 1/3 시점에 화질이 이미 끝까지 돌린 결과와 0.01 dB 안으로 들어온다. 자동 규칙은 안전하지만(손실 0.002 dB 이하) 보수적이고(시간 79–84%), 표본 학습이 가장 싸다. EMA VQ 코드북(이미지 토크나이저)에서는 벡터의 5–26%가 계속 코드를 바꾸고 코드가 크게 흔들려 자동 규칙이 개입하지 않았다. soft 토큰은 거리 기반이 이력 기반보다 낫다. |
-| 비용·오차 동시 비교 | 완성된 절차끼리(sklearn tol, Pérez-Ortega 규칙, 고정 반복, 끝까지) 같은 실행에서 시간과 오류를 함께 비교하면, 10개 사례 모두에서 Markov-K-means보다 싸면서 정확한 절차가 없다. 표류에서는 사후 최적 정지 대비 시간 +0–5%로 가장 일정한 오류(최대 0.62%)를 내고, 영구 진동에서는 어떤 "멈춤 + 유지" 절차도 못 내는 결과를 낸다. |
-| 목표 오차별 시간 | 각 방법의 설정을 바꿔 가며 같은 오류에 드는 시간을 비교하면, 영구 진동에서는 Markov-K-means가 모든 목표에서 가장 빠르고, 끝까지 돌려도 못 내는 오류까지 낸다. 표류에서는 설정을 조정한 Pérez-Ortega·sklearn이 3–6%p 빠르다. |
-| 자동 판단 | N=10⁶ 10개 사례에서 끝까지 돌린 시간의 6–83%로 오류율 0.05–0.62%를 낸다. 상수 스텝에서는 sklearn식 규칙이 끝내 멈추지 못하지만, 자동 규칙은 10–62% 시점에서 멈추고 끝까지 돌린 결과와 비슷한 오류를 낸다. |
+### 작동 방식
 
-**권장 사용법:** 극소수 비수렴 점 때문에 반복을 계속하는 비용을 줄이는 정지 규칙, 그리고 그 점들의 불확실성 표시로 쓴다. 영구 진동 체제에서는 소속 비율로도 쓴다. 끝까지 수렴한 결과보다 정확해지는 방법으로 기대하면 안 된다.
+1. 기반 알고리즘을 돌린다. 모든 점의 최근 `window + 1`개 라벨은 링 버퍼에 저장한다.
+2. 매 반복 뒤 감시기가 실행 전체를 판정한다. 싼 검사부터 하고, 비싼 검사는 필요할 때만 한다.
+   - **움직임:** 창 안에서 라벨이 바뀐 점의 비율, 그리고 그 점들이 왔다 갔다 하는지
+   - **대표점:** 대표점이 이동 중인지, 제자리에서 흔들리기만 하는지
+   - **분할:** 군집 크기가 변하는지, 구성원이 한쪽으로 흐르는지 아니면 서로 주고받는지
+3. 모두 잠잠해지면 멈추고 체제를 판정한다.
+   - `drift`: 점들이 옮겨 가 자리를 잡는 중
+   - `oscillation`: 점들이 계속 바뀌고 그 수가 더 줄지 않음
+4. 미결정 점을 체제에 맞게 정리한다.
+   - 표류에서는 한 번 옮긴 점은 라벨을 유지하고, 오가는 점은 머문 비율을 받는다.
+   - 진동에서는 모든 점이 머문 비율을 받는다.
 
-### 저장소 구성
+   `assign_rule="markov"`를 쓰면 대신 각 점의 라벨 Markov 연쇄의 장기 분포를 쓴다.
 
-| 경로 | 내용 |
-|---|---|
-| `markov_kmeans/` | 배포 패키지(PyPI `markov-kmeans`) |
-| `kmeans_accel/` | 연구용 커널과 기준선(저장소 전용): Lloyd, Hamerly, mini-batch, 꼬리 처리 전략 |
-| `experiments/` | T₀ 스윕, 점별 연구, 자동 규칙 평가, 응용 실험(색 양자화, VQ 코드북), 집계·그림 |
-| `docs/` | 연구 계획, 선행연구, 결과 보고서, 그림·표 |
-| `tests/` | Lloyd 동등성, 판단 규칙, Markov 편입, 패키지 API 테스트 |
+### 주요 매개변수
 
-```bash
-pip install -e ".[dev]"
-python -m pytest -q                        # 테스트
-./experiments/run_markov_tail.sh all       # T₀ 스윕 재현 (4 CPU 기준 수 시간)
-python -m experiments.auto_rule            # 자동 판단 규칙 평가
-./experiments/run_applications.sh          # 응용 실험
-python -m experiments.analyze_markov_tail  # 그림·표·보고서 갱신
-python -m experiments.analyze_applications
-```
+| 매개변수 | 기본값 | 의미 |
+|---|---|---|
+| `n_clusters` | 8 | 군집 수 |
+| `algorithm` | `"hamerly"` | `"hamerly"`, `"lloyd"`, `"minibatch"` |
+| `learning_rate`, `eta`, `batch_size` | `"count"`, 2e-4, 4096 | mini-batch 보폭: `"count"`(1/count) 또는 `"constant"`(고정 `eta`) |
+| `stop_rule` | `"auto"` | `"auto"`는 상태를 판정하고, `"unstable"`은 바뀌는 점의 비율만 본다 |
+| `assign_rule` | `"auto"` | `"auto"`(체제별), `"markov"`, `"frequency"`, `"keep"` |
+| `t0` | `None` | 이 반복에서 멈춘 뒤 정리한다 |
+| `unstable_tol` | 1e-3 | 낮출수록 늦게 멈추고 미결정 점이 줄어든다 |
+| `window` | 10 | 점마다 보관하는 라벨 이력의 반복 수 |
+| `min_iter`, `max_iter` | 10, 300 | 반복 수 범위 |
+| `center_update` | `"auto"` | 최종 대표점: `"hard"`, `"soft"`(소속도 가중), `"none"` |
 
-### 라이선스
+감시기의 나머지 임계값은 docstring에 정리되어 있고, 평가는 모두 기본값으로 했다. 진단 속성으로 `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_`, `labels_at_stop_`이 있다. `predict`, `transform`, `fit_predict`, `score`는 scikit-learn과 같다.
+
+### 더 보기
+
+- [평가 보고서](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md): 방법, 그림 뒤의 모든 수치, 색 양자화·VQ 코드북 실험
+- [선행연구](https://github.com/busimm3318/Markov-K-means/blob/main/docs/literature_review.md)
+- [빠른 시작 예제](https://github.com/busimm3318/Markov-K-means/blob/main/examples/quickstart.py)
+
+---
 
 Apache-2.0

@@ -12,10 +12,12 @@ reaches the same error in less time.
     Perez-Ortega              threshold on the share of changed labels swept
     fixed iterations          fixed number of iterations, labels kept
 
-    python -m experiments.time_for_error   # experiments/results/time_for_error.csv, docs/figures/fig9_time_for_error.png
+    python -m experiments.time_for_error          # experiments/results/time_for_error.csv, docs/figures/fig9_time_for_error.png
+    python -m experiments.time_for_error --plot   # redraw the figure from the saved CSV
 """
 from __future__ import annotations
 
+import sys
 import time
 
 import numpy as np
@@ -121,8 +123,9 @@ def report_tables(cv):
     return T
 
 
-TITLE = {"exact": "exact Lloyd (4 instances)", "minibatch": "mini-batch 1/count (2 instances)",
-         "minibatch_const": "mini-batch constant step (4 instances)"}
+TITLE = {"exact": "Exact Lloyd / Hamerly\nboundary points drift, then settle",
+         "minibatch": "Mini-batch, 1/count step\nboundary points drift, then settle",
+         "minibatch_const": "Mini-batch, constant step (EMA)\nboundary points keep oscillating"}
 
 
 def figure(cv):
@@ -160,8 +163,11 @@ def figure(cv):
     plt.close(fig)
 
 
-def main():
+def main(argv=()):
     plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
+    if "--plot" in argv:
+        figure(curves(pd.read_csv(RESULTS / "time_for_error.csv")))
+        return None
     warm_up()
     df = pd.concat([sweep(*inst) for inst in INSTANCES], ignore_index=True)
     df.to_csv(RESULTS / "time_for_error.csv", index=False)
@@ -175,4 +181,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
