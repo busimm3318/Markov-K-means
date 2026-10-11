@@ -47,7 +47,7 @@ def mechanism():
     ax.axis("off")
     y1, h1 = 2.75, 1.45
     _box(ax, 0.1, y1, 2.0, h1, "Base step", "one iteration of\nHamerly, Lloyd\nor mini-batch")
-    _box(ax, 2.55, y1, 2.0, h1, "Label history", "last W+1 labels\nof every point")
+    _box(ax, 2.55, y1, 2.0, h1, "History", "last W+1 labels\nof every point and\npositions of centers")
     _box(ax, 5.0, y1, 2.55, h1, "State monitor", "who still changes?\ncenters travel or jitter?\nclusters reorganise or swap?",
          accent=True)
     cx, cy, dx, dy = 8.85, y1 + h1 / 2, 0.8, 0.62
@@ -60,18 +60,93 @@ def mechanism():
     top = y1 + h1 + 0.42
     _arrow(ax, [(cx, cy + dy), (cx, top), (1.1, top), (1.1, y1 + h1)], "no: next iteration", (5.0, top + 0.02))
 
-    y2, h2 = 0.12, 1.55
-    mid = y2 + h2 + 0.5
-    _arrow(ax, [(cx, cy - dy), (cx, mid), (1.45, mid), (1.45, y2 + h2)], "yes: stop", (5.0, mid + 0.02))
-    _box(ax, 0.1, y2, 2.9, h2, "Name the regime", "drift: points moved,\nnow settling\noscillation: points\nkeep switching")
-    _box(ax, 3.55, y2, 3.0, h2, "Settle undecided points", "each from its own\nlabel history\n(see the figure below)",
+    y2, h2 = 0.12, 1.62
+    mid = y2 + h2 + 0.45
+    w, gap = 2.19, 0.35
+    xs = [0.1 + i * (w + gap) for i in range(4)]
+    _arrow(ax, [(cx, cy - dy), (cx, mid), (xs[0] + w / 2, mid), (xs[0] + w / 2, y2 + h2)], "yes: stop",
+           (5.0, mid + 0.02))
+    _box(ax, xs[0], y2, w, h2, "Center chains", "each center's path:\nwhere it is heading\n= pseudo representative",
          accent=True)
-    _box(ax, 7.1, y2, 2.8, h2, "Output", "hard labels\nsoft memberships\nlist of undecided points")
-    _arrow(ax, [(3.0, y2 + h2 / 2), (3.55, y2 + h2 / 2)])
-    _arrow(ax, [(6.55, y2 + h2 / 2), (7.1, y2 + h2 / 2)])
+    _box(ax, xs[1], y2, w, h2, "Reassign", "every point to its\nnearest pseudo rep.;\nkept if SSE not higher")
+    _box(ax, xs[2], y2, w, h2, "Label chains", "undecided points:\nmembership from\ntheir own history",
+         accent=True)
+    _box(ax, xs[3], y2, w, h2, "Output", "hard labels\nsoft memberships\nundecided points")
+    for i in range(3):
+        _arrow(ax, [(xs[i] + w, y2 + h2 / 2), (xs[i + 1], y2 + h2 / 2)])
     fig.patch.set_facecolor(SURFACE)
     fig.tight_layout(pad=0.4)
     fig.savefig(FIG / "readme_mechanism.png", dpi=160)
+    plt.close(fig)
+
+
+def _bisector(ax, a, b, color, ls, label=None):
+    """Draw the boundary between centers a and b (their perpendicular bisector) across the panel."""
+    m, d = (a + b) / 2, b - a
+    u = np.array([-d[1], d[0]]) / np.hypot(*d)
+    pts = np.array([m - 4 * u, m + 4 * u])
+    ax.plot(pts[:, 0], pts[:, 1], color=color, ls=ls, lw=1.8, label=label, zorder=2)
+
+
+def _side(P, a, b):
+    """True where a point is nearer to b than to a."""
+    return ((P - b) ** 2).sum(1) < ((P - a) ** 2).sum(1)
+
+
+def pseudo_figure():
+    """Center chain -> pseudo representative, in a drift and in an oscillation (geometry, not data)."""
+    rng = np.random.default_rng(3)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
+    a_star, b_star = np.array([3.6, 2.0]), np.array([6.4, 2.0])
+    P = np.c_[rng.uniform(3.4, 6.6, 140), rng.uniform(0.3, 3.7, 140)]
+    # drift: A converges geometrically towards its fixed point, B has stopped
+    s = np.arange(2, 10)
+    pathA = a_star + 0.75 ** s[:, None] * np.array([-5.0, -2.6])
+    paths = {"drift": (pathA, np.repeat(b_star[None], len(s), 0))}
+    # oscillation: both jitter around fixed points
+    ja, jb = rng.normal(scale=0.22, size=(9, 2)), rng.normal(scale=0.22, size=(9, 2))
+    ja[-1], jb[-1] = [0.45, 0.3], [0.4, -0.25]          # the last jitter happens to lean right
+    paths["oscillation"] = (a_star + ja, b_star + jb)
+    titles = {"drift": "Drift: the chain is extrapolated to its fixed point",
+              "oscillation": "Oscillation: the chain's mean, not its last jitter"}
+    for ax, key in zip(axes, ("drift", "oscillation")):
+        pa, pb = paths[key]
+        Cw = np.stack([pa, pb], 1)
+        Cs, _ = _rules.long_run_centers(Cw)
+        a_t, b_t = pa[-1], pb[-1]
+        now, later = _side(P, a_t, b_t), _side(P, Cs[0], Cs[1])
+        move = now != later
+        for lab, col in ((False, BLUE), (True, ORANGE)):
+            q = P[(now == lab) & ~move]
+            ax.scatter(q[:, 0], q[:, 1], s=14, color=col, alpha=0.35, edgecolor="none", zorder=1)
+            q = P[(later == lab) & move]
+            ax.scatter(q[:, 0], q[:, 1], s=46, facecolor=col, edgecolor=INK, linewidth=1.1, zorder=4)
+        for path, col in ((pa, BLUE), (pb, ORANGE)):
+            ax.plot(path[:, 0], path[:, 1], color=col, lw=1, alpha=0.6, zorder=3)
+            ax.scatter(path[:-1, 0], path[:-1, 1], s=16, color=col, alpha=0.5, zorder=3)
+            ax.scatter([path[-1, 0]], [path[-1, 1]], s=70, color=col, edgecolor=SURFACE, linewidth=1.2, zorder=5)
+        ax.scatter(Cs[:, 0], Cs[:, 1], marker="*", s=300, color=[BLUE, ORANGE], edgecolor=INK, linewidth=1, zorder=6)
+        _bisector(ax, a_t, b_t, INK2, ":", "boundary now")
+        _bisector(ax, Cs[0], Cs[1], INK, "-", "boundary at the pseudo representatives")
+        ax.set_xlim(0.6, 8.0)
+        ax.set_ylim(-0.5, 4.3)
+        ax.set_aspect("equal")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for sp in ax.spines.values():
+            sp.set_color(GRID)
+        ax.set_title(titles[key], fontsize=11.5, color=INK, loc="left")
+    h = [plt.Line2D([], [], color=INK2, marker="o", ms=4, lw=1, alpha=0.7),
+         plt.Line2D([], [], ls="none", marker="o", ms=8, color=INK2, markeredgecolor=SURFACE),
+         plt.Line2D([], [], ls="none", marker="*", ms=15, color=INK2, markeredgecolor=INK),
+         plt.Line2D([], [], color=INK2, ls=":", lw=1.8), plt.Line2D([], [], color=INK, lw=1.8),
+         plt.Line2D([], [], ls="none", marker="o", ms=7, color=INK2, markeredgecolor=INK)]
+    l = ["center path in the window", "center now", "pseudo representative (long-run mean)", "boundary now",
+         "boundary at the pseudo representatives", "point moved now (colour: new cluster)"]
+    fig.legend(h, l, loc="lower center", ncol=3, frameon=False, fontsize=10, labelcolor=INK2)
+    fig.patch.set_facecolor(SURFACE)
+    fig.tight_layout(rect=(0, 0.13, 1, 1))
+    fig.savefig(FIG / "readme_pseudo.png", dpi=160)
     plt.close(fig)
 
 
@@ -200,6 +275,7 @@ def main(argv=()):
     plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
     FIG.mkdir(parents=True, exist_ok=True)
     mechanism()
+    pseudo_figure()
     settle_figure()
     social_preview()
     df = pd.read_csv(RESULTS / "readme_tail.csv") if "--plot" in argv else tail_data()

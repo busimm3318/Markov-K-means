@@ -1,6 +1,6 @@
 # Markov-K-means
 
-K-means that stops once the only work left is a handful of boundary points changing cluster, and settles those points from their own label history.
+K-means that stops once the only work left is a handful of boundary points changing cluster, then finishes the run with Markov chains: the path of each center tells where it is heading, and each undecided point's label history tells how it splits between clusters.
 
 [English](#english) · [한국어](#한국어)
 
@@ -16,6 +16,7 @@ mk.labels_                    # hard labels
 mk.cluster_centers_           # centers
 mk.unstable_indices_          # points still undecided when the run stopped
 mk.membership_                # sparse (n, k): one-hot for settled points, a distribution for undecided ones
+mk.pseudo_centers_            # where each center was heading (long-run mean of its path)
 mk.stop_reason_, mk.regime_   # why it stopped; "drift" or "oscillation"
 ```
 
@@ -27,7 +28,7 @@ mk.stop_reason_, mk.regime_   # why it stopped; "drift" or "oscillation"
 
 ![How a Markov-K-means run proceeds](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/readme_mechanism.png)
 
-The base algorithm runs as usual while the recent labels of every point are kept. After each iteration a monitor asks three questions about the whole run, cheapest first. Once all three answers are quiet, the run stops.
+The base algorithm runs as usual while the recent labels of every point and the recent positions of the centers are kept. After each iteration a monitor asks three questions about the whole run, cheapest first. Once all three answers are quiet, the run stops.
 
 | check | question | quiet when |
 |---|---|---|
@@ -35,14 +36,23 @@ The base algorithm runs as usual while the recent labels of every point are kept
 | Representatives | Are the centers travelling, or jittering in place? | the centers barely move, or only jitter around fixed positions |
 | Partitions | Are the clusters reorganising, or only swapping members? | cluster sizes are steady, and few members move or they move both ways |
 
-At the stop the monitor names the regime, and every undecided point is settled from its own label history:
+At the stop, two kinds of Markov chains finish the run.
+
+**1. The centers' chains give pseudo representatives.** Each center's recent path is read as a chain that keeps stepping the same way. Its long-run position is where a converging center is heading, or the middle of a center that only jitters. Every point is then assigned to its nearest pseudo representative. This moves, right away, the points that are about to cross a boundary but have not moved yet, which no label history can see. The new labels are kept only if they fit the data at least as well as the old ones.
+
+![Pseudo representatives: a drifting center is extrapolated, a jittering one is averaged](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/readme_pseudo.png)
+
+**2. The labels' chains settle the undecided points.** The undecided points are those that changed cluster in the window, plus those the pseudo representatives just moved. Each gets a membership from its own label history:
 
 ![How undecided points are settled from their label history](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/readme_settle.png)
 
-| regime | what the undecided points do | how they are settled |
-|---|---|---|
-| drift | moved and are settling | a point that moved once keeps its new cluster; a point that went back and forth gets its share of time in each cluster |
-| oscillation | keep switching forever | every point gets its share of time in each cluster; the larger share is its hard label |
+| undecided point | membership |
+|---|---|
+| moved once and stayed (drift) | its cluster |
+| keeps switching (oscillation) | its share of time in each cluster |
+| just moved by the pseudo representatives | mostly its new cluster, some of the old one; the later its boundary would have crossed it, the more of the old |
+
+When the monitor diagnoses an oscillation, every point that changed in the window gets its share of time. Hard labels come from the pseudo representatives; if their labels were not kept, from the larger share.
 
 ### Where the time of a run goes
 
@@ -144,12 +154,13 @@ r.labels, r.dense(n_clusters), r.uncertainty
 | `stop_rule` | `"auto"` | `"auto"` judges the state; `"unstable"` looks only at the share of changing points |
 | `assign_rule` | `"auto"` | `"auto"` (by regime), `"markov"`, `"frequency"`, `"keep"` |
 | `t0` | `None` | stop at this iteration instead, then settle |
+| `representatives` | `"markov"` | `"markov"` finishes from the pseudo representatives; `"current"` settles against the current centers only (the 0.3 behaviour) |
 | `unstable_tol` | 1e-3 | lower stops later and leaves fewer undecided points |
 | `window` | 10 | iterations of label history kept per point |
 | `min_iter`, `max_iter` | 10, 300 | iteration bounds |
-| `center_update` | `"auto"` | final centers: `"hard"`, `"soft"` (membership-weighted), `"none"` |
+| `center_update` | `"auto"` | final centers: `"hard"`, `"soft"` (membership-weighted), `"pseudo"` (the pseudo representatives), `"none"` |
 
-The monitor's other thresholds are documented in the docstring; the evaluation used their defaults. `assign_rule="markov"` settles every undecided point by the long-run law of its label Markov chain. Diagnostics include `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_` and `labels_at_stop_`. `MarkovKMeans` is a scikit-learn estimator: it passes scikit-learn's `check_estimator` and works with `clone`, `Pipeline`, `GridSearchCV` and `set_output`.
+The monitor's other thresholds are documented in the docstring; the evaluation used their defaults. `assign_rule="markov"` settles every undecided point by the long-run law of its label Markov chain. Diagnostics include `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_`, `labels_at_stop_`, and for the pseudo representatives `pseudo_centers_`, `center_rho_`, `pseudo_accepted_` and `predicted_moves_`. `MarkovKMeans` is a scikit-learn estimator: it passes scikit-learn's `check_estimator` and works with `clone`, `Pipeline`, `GridSearchCV` and `set_output`.
 
 ### Further reading
 
@@ -166,7 +177,7 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 
 ![Markov-K-means 실행 흐름](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/readme_mechanism.png)
 
-기반 알고리즘은 평소처럼 돌고, 모든 점의 최근 라벨이 기록된다. 매 반복 뒤 감시기가 실행 전체에 대해 세 가지를 묻는다. 싼 질문부터 묻고, 셋 다 잠잠해지면 멈춘다.
+기반 알고리즘은 평소처럼 돌고, 모든 점의 최근 라벨과 대표점의 최근 위치가 기록된다. 매 반복 뒤 감시기가 실행 전체에 대해 세 가지를 묻는다. 싼 질문부터 묻고, 셋 다 잠잠해지면 멈춘다.
 
 | 검사 | 질문 | 잠잠하다고 보는 때 |
 |---|---|---|
@@ -174,14 +185,23 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 | 대표점 | 대표점이 이동 중인가, 제자리에서 흔들리기만 하는가? | 대표점이 거의 움직이지 않거나, 고정된 위치 주변에서 흔들리기만 할 때 |
 | 분할 | 군집이 재편되는 중인가, 구성원을 주고받기만 하는가? | 군집 크기가 일정하고, 움직이는 구성원이 적거나 양방향으로 오갈 때 |
 
-멈추면 감시기가 체제를 판정하고, 미결정 점은 각자의 라벨 이력으로 정리한다.
+멈추면 두 종류의 Markov 연쇄가 실행을 마무리한다.
+
+**1. 대표점의 연쇄가 의사 대표점(pseudo representative)을 준다.** 대표점마다 최근 경로를 같은 방식으로 계속 걸어가는 연쇄로 읽는다. 그 장기 위치는 수렴 중인 대표점이 향하는 곳이고, 흔들리기만 하는 대표점이면 흔들림의 한가운데다. 모든 점을 가장 가까운 의사 대표점에 다시 배정한다. 경계를 곧 넘을 참이지만 아직 움직이지 않은 점, 즉 어떤 라벨 이력도 볼 수 없는 점을 지금 옮겨 준다. 새 라벨은 데이터에 대한 적합도가 이전보다 나쁘지 않을 때만 채택한다.
+
+![의사 대표점: 표류하는 대표점은 외삽하고, 흔들리는 대표점은 평균한다](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/readme_pseudo.png)
+
+**2. 라벨의 연쇄가 미결정 점을 정리한다.** 미결정 점은 관찰 창 안에서 군집을 바꾼 점에, 의사 대표점이 방금 옮긴 점을 더한 것이다. 각 점은 자기 라벨 이력에서 소속도를 받는다.
 
 ![라벨 이력으로 미결정 점을 정리하는 방식](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/readme_settle.png)
 
-| 체제 | 미결정 점의 거동 | 정리 방식 |
-|---|---|---|
-| 표류 (drift) | 옮겨 가서 자리 잡는 중 | 한 번 옮긴 점은 새 군집에 두고, 왔다 갔다 한 점은 군집별로 머문 시간의 비율을 준다 |
-| 진동 (oscillation) | 영원히 오감 | 모든 점에 군집별로 머문 시간의 비율을 주고, 더 큰 쪽을 hard 라벨로 삼는다 |
+| 미결정 점 | 소속도 |
+|---|---|
+| 한 번 옮겨 가 자리 잡은 점 (표류) | 그 군집 |
+| 계속 오가는 점 (진동) | 군집별로 머문 시간의 비율 |
+| 의사 대표점이 방금 옮긴 점 | 대부분 새 군집, 일부는 옛 군집. 경계가 늦게 지나갈 점일수록 옛 군집 몫이 크다 |
+
+감시기가 진동으로 판정하면, 관찰 창 안에서 바뀐 모든 점이 머문 시간의 비율을 받는다. hard 라벨은 의사 대표점에서 오고, 의사 대표점의 라벨을 채택하지 않았으면 더 큰 비율 쪽이다.
 
 ### 실행 시간은 어디에 쓰이는가
 
@@ -283,12 +303,13 @@ r.labels, r.dense(n_clusters), r.uncertainty
 | `stop_rule` | `"auto"` | `"auto"`는 상태를 판정하고, `"unstable"`은 바뀌는 점의 비율만 본다 |
 | `assign_rule` | `"auto"` | `"auto"`(체제별), `"markov"`, `"frequency"`, `"keep"` |
 | `t0` | `None` | 이 반복에서 멈춘 뒤 정리한다 |
+| `representatives` | `"markov"` | `"markov"`는 의사 대표점으로 마무리하고, `"current"`는 현재 대표점 기준으로 이력 정리만 한다(0.3 동작) |
 | `unstable_tol` | 1e-3 | 낮출수록 늦게 멈추고 미결정 점이 줄어든다 |
 | `window` | 10 | 점마다 보관하는 라벨 이력의 반복 수 |
 | `min_iter`, `max_iter` | 10, 300 | 반복 수 범위 |
-| `center_update` | `"auto"` | 최종 대표점: `"hard"`, `"soft"`(소속도 가중), `"none"` |
+| `center_update` | `"auto"` | 최종 대표점: `"hard"`, `"soft"`(소속도 가중), `"pseudo"`(의사 대표점), `"none"` |
 
-감시기의 나머지 임계값은 docstring에 정리되어 있고, 평가는 모두 기본값으로 했다. `assign_rule="markov"`는 모든 미결정 점을 라벨 Markov 연쇄의 장기 분포로 정리한다. 진단 속성으로 `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_`, `labels_at_stop_`이 있다. `MarkovKMeans`는 scikit-learn 추정기다. scikit-learn의 `check_estimator`를 통과하고 `clone`, `Pipeline`, `GridSearchCV`, `set_output`과 함께 쓸 수 있다.
+감시기의 나머지 임계값은 docstring에 정리되어 있고, 평가는 모두 기본값으로 했다. `assign_rule="markov"`는 모든 미결정 점을 라벨 Markov 연쇄의 장기 분포로 정리한다. 진단 속성으로 `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_`, `labels_at_stop_`, 의사 대표점 관련 `pseudo_centers_`, `center_rho_`, `pseudo_accepted_`, `predicted_moves_`가 있다. `MarkovKMeans`는 scikit-learn 추정기다. scikit-learn의 `check_estimator`를 통과하고 `clone`, `Pipeline`, `GridSearchCV`, `set_output`과 함께 쓸 수 있다.
 
 ### 더 보기
 

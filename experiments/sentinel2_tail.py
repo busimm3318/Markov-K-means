@@ -13,12 +13,17 @@ differ only in where they stop:
     pct5_10        changed share < 5 % or 10 iterations (common tutorial setting)
     pct2           changed share < 2 %, no iteration cap
     sklearn_tol    squared center shift <= 1e-4 x mean feature variance (scikit-learn default)
-    markov_auto    MarkovKMeans defaults: StateMonitor, then settlement from label histories
+    markov_v03     Markov-K-means 0.3 (representatives="current"): StateMonitor, then
+                   settlement from label histories
+    markov_auto    MarkovKMeans defaults (0.4): the same stop, then pseudo representatives
+                   from the center chains (one Hamerly-pruned assignment pass, timed) and the
+                   history settlement of the undecided pixels
     full           convergence: the reference partition
 
 The 60 m study asks what a fractional membership means on real pixels: the 20 m cube is
 averaged to 60 m, clustered with MarkovKMeans, and each 60 m pixel's undecided status and
-soft membership are compared with the mixture of its nine 20 m sub-pixels.
+soft membership are compared with the mixture of its nine 20 m sub-pixels (for the
+defaults and for representatives="current").
 
     python -m experiments.sentinel2_tail select   # -> experiments/results/sentinel2_scenes.csv
     python -m experiments.sentinel2_tail run      # -> sentinel2_rules.csv, sentinel2_curves.csv, sentinel2_mixing.csv
@@ -148,7 +153,7 @@ def load(url):
 
 # ----------------------------------------------------------------------------- the tail run
 
-RULES = ("envi_2pct_10", "pct5_10", "pct2", "sklearn_tol", "markov_auto", "full")
+RULES = ("envi_2pct_10", "pct5_10", "pct2", "sklearn_tol", "markov_v03", "markov_auto", "full")
 
 
 def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
@@ -157,6 +162,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
     from markov_kmeans import _rules
     from markov_kmeans._engines import HamerlyEngine
     from markov_kmeans._kernels import compute_centers, inertia
+    from markov_kmeans.estimator import pseudo_finish
 
     n = X.shape[0]
     t_init = time.perf_counter()
@@ -216,16 +222,25 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
                 else:
                     U = mon.unstable().astype(np.int64)
                     Hw = mon.window(U)
-                    lab_U, _, _, _ = _rules.settle(Hw, L[U], rule="auto", n_clusters=k, regime=regime)
+                    lab_U, S, P, osc = _rules.settle(Hw, L[U], rule="auto", n_clusters=k, regime=regime)
                     lab = L.copy()
                     lab[U] = lab_U
                 settle_s = time.perf_counter() - t_s
+                t_s = time.perf_counter()
+                if regime == "converged":
+                    lab4, U4, moves, accepted, rho = lab, U, U, False, np.zeros(k)
+                else:
+                    lab4, U4, _, _, _, _, rho, moves, accepted, _ = pseudo_finish(X, eng, mon, L, lab, U, S, P, osc)
+                pseudo_s = time.perf_counter() - t_s
                 markov = dict(t=t, regime=regime, reason=("few_unstable" if regime == "drift" and
                                                           state.get("unstable_frac", 1) <= mon.params.unstable_tol
                                                           else {"drift": "stable_drift"}.get(regime, regime)),
-                              U=U, settle_s=settle_s, mon_s=mon_s, keep=L.astype(np.uint8))
-                fired["markov_auto"] = (t, cum + mon_s + settle_s)
-                snaps["markov_auto"] = lab.astype(np.uint8)
+                              U=U, U4=U4, moves=moves, accepted=accepted, rho=rho, settle_s=settle_s,
+                              pseudo_s=pseudo_s, mon_s=mon_s, keep=L.astype(np.uint8))
+                fired["markov_v03"] = (t, cum + mon_s + settle_s)
+                snaps["markov_v03"] = lab.astype(np.uint8)
+                fired["markov_auto"] = (t, cum + mon_s + settle_s + pseudo_s)
+                snaps["markov_auto"] = lab4.astype(np.uint8)
                 del mon      # the monitor is not needed past its decision
         if changed == 0:
             break
@@ -248,7 +263,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
     for c in curve:
         c["error"] = float((snaps[c["t"]] != ref).mean()) if c["t"] in snaps else np.nan
     if markov is not None:
-        U, wrong = markov["U"], snaps["markov_auto"] != ref
+        U, wrong = markov["U"], snaps["markov_v03"] != ref
         wrong_keep = markov["keep"] != ref
         inU = np.zeros(n, dtype=bool)
         inU[U] = True
@@ -258,6 +273,18 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
                      U_error_keep=float(wrong_keep[inU].mean()) if len(U) else np.nan,
                      U_error_markov=float(wrong[inU].mean()) if len(U) else np.nan,
                      monitor_s=markov["mon_s"], settle_s=markov["settle_s"])
+        # 0.4: pseudo representatives
+        wrong4 = snaps["markov_auto"] != ref
+        in4 = np.zeros(n, dtype=bool)
+        in4[markov["U4"]] = True
+        mv = markov["moves"]
+        extra.update(pseudo_s=markov["pseudo_s"], pseudo_accepted=bool(markov["accepted"]), moves_frac=len(mv) / n,
+                     moves_right=float((~wrong4[mv]).mean()) if len(mv) else np.nan,
+                     fixed=int((wrong_keep & ~wrong4).sum()), broken=int((~wrong_keep & wrong4).sum()),
+                     undecided_frac=float(in4.mean()),
+                     undecided_recall=float((wrong4 & in4).sum() / max(wrong4.sum(), 1)),
+                     undecided_precision=float(wrong4[in4].mean()) if in4.any() else np.nan,
+                     rho_median=float(np.median(markov["rho"])))
     extra.update(n=n, k=k, converged=bool(curve[-1]["changed"] == 0), total_iter=t, total_s=cum, seed_s=seed_s,
                  assign0_s=assign0_s)
     return pd.DataFrame(rows), pd.DataFrame(curve), extra
@@ -265,7 +292,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
 
 # ----------------------------------------------------------------------------- 60 m mixing study
 
-def mixing(cube, valid, k=K, seed=SEED):
+def mixing(cube, valid, k=K, seed=SEED, representatives="markov"):
     """Undecided 60 m pixels and soft memberships vs the mixture of their 20 m sub-pixels."""
     from sklearn.metrics import roc_auc_score
 
@@ -276,7 +303,7 @@ def mixing(cube, valid, k=K, seed=SEED):
     ok = valid[:3 * m, :3 * m].reshape(m, 3, m, 3).all((1, 3))
     X60 = c.mean((1, 3))[ok].astype(np.float64)
     sub = c.transpose(0, 2, 1, 3, 4)[ok].reshape(-1, cube.shape[2])                       # (9 n60, d), float32
-    mk = MarkovKMeans(k, random_state=seed).fit(X60)
+    mk = MarkovKMeans(k, random_state=seed, representatives=representatives).fit(X60)
     C = mk.cluster_centers_
     # sub-pixel classes under the same centers, in chunks
     lab_sub = np.empty(len(sub), dtype=np.int64)
@@ -297,7 +324,7 @@ def mixing(cube, valid, k=K, seed=SEED):
     inU[mk.unstable_indices_] = True
     unc = np.zeros(len(X60))
     unc[mk.unstable_indices_] = mk.uncertainty_
-    out = dict(n60=len(X60), stop_reason=mk.stop_reason_, regime=mk.regime_, iterations=mk.n_iter_,
+    out = dict(representatives=representatives, n60=len(X60), stop_reason=mk.stop_reason_, regime=mk.regime_, iterations=mk.n_iter_,
                U_frac=float(inU.mean()), mixed_any_frac=float(mixed_any.mean()), mixed_frac=float(mixed.mean()),
                mixed_frac_in_U=float(mixed[inU].mean()) if inU.any() else np.nan,
                mixed_frac_outside_U=float(mixed[~inU].mean()),
@@ -337,16 +364,18 @@ def run(only=None):
         print(f"{s.site}: n={len(X):,} valid={valid.mean():.1%} loaded in {load_s:.0f}s", flush=True)
         rules, curve, extra = tail_run(X)
         del X
-        mix = mixing(cube, valid)
+        mix = [mixing(cube, valid, representatives=r) for r in ("markov", "current")]
         del cube, valid
         for df, f in ((rules, f_rules), (curve, f_curves)):
             df.insert(0, "site", s.site)
             df.to_csv(f, mode="a", header=not os.path.exists(f), index=False)
-        pd.DataFrame([dict(site=s.site, **mix)]).to_csv(f_mix, mode="a", header=not os.path.exists(f_mix), index=False)
+        pd.DataFrame([dict(site=s.site, **m) for m in mix]).to_csv(f_mix, mode="a", header=not os.path.exists(f_mix),
+                                                                   index=False)
         pd.DataFrame([dict(site=s.site, tile=s["tile"], item=s["item"], cloud_cover=s["cloud_cover"], valid_load_s=load_s,
                            **extra)]).to_csv(f_runs, mode="a", header=not os.path.exists(f_runs), index=False)
         print(rules.round(5).to_string(index=False), flush=True)
-        print({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in {**extra, **mix}.items()}, flush=True)
+        for d in (extra, *mix):
+            print({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in d.items()}, flush=True)
 
 
 # ----------------------------------------------------------------------------- report

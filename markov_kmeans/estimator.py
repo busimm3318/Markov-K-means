@@ -23,6 +23,28 @@ _REPRESENTATIVES = ("markov", "current")
 _CENTER_UPDATES = ("auto", "hard", "soft", "pseudo", "none")
 
 
+def pseudo_finish(X, engine, monitor, L, labels, U, S, P, oscillating, rho_max=0.95):
+    """Center chains -> pseudo representatives -> assignment, kept if it does not raise the SSE.
+
+    ``L`` are the engine's labels at the stop and ``(labels, U, S, P, oscillating)`` the
+    history settlement. Returns ``(labels, U, S, P, oscillating, pseudo_centers, rho, moves,
+    accepted, n_dist)``: when the pseudo labelling is rejected the settlement comes back
+    unchanged, with no moves.
+    """
+    C = engine.centers
+    Cs, rho = _rules.long_run_centers(monitor.centers_window(), rho_max)
+    pseudo, n_dist = engine.nearest(Cs)
+    moves = np.flatnonzero(pseudo != L)
+    M0, n0 = compute_centers(X, L, C)
+    accepted = (_rules.sse_change(X, L, pseudo, moves, M0, n0)
+                <= _rules.sse_change(X, L, labels, U, M0, n0))
+    if not accepted:
+        return labels, U, S, P, oscillating, Cs, rho, moves[:0], False, n_dist
+    frac = _rules.crossing_fraction(X[moves], L[moves], pseudo[moves], C, Cs)
+    U, S, P, oscillating = _rules.undecided(U, S, P, oscillating, moves, frac, pseudo, L)
+    return pseudo, U, S, P, oscillating, Cs, rho, moves, True, n_dist
+
+
 class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMixin, BaseEstimator):
     """Markov-K-means clustering.
 
@@ -297,24 +319,15 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
                 n_clusters=k, oscillation_rule=self.oscillation_rule, regime=regime)
             labels[U] = labels_U
 
-        # center chains -> pseudo representatives -> assignment, kept if it lowers the SSE
         Cs, rho = C.copy(), np.zeros(k)
         moves = np.empty(0, dtype=np.int64)
         accepted, n_extra = False, 0
         if stop_reason != "converged" and monitor.t >= 2 and W >= 2:
-            Cs, rho = _rules.long_run_centers(monitor.centers_window(), self.rho_max)
             if self.representatives == "markov":
-                pseudo, n_extra = engine.nearest(Cs)
-                moves = np.flatnonzero(pseudo != L)
-                M0, n0 = compute_centers(X, L, C)
-                accepted = (_rules.sse_change(X, L, pseudo, moves, M0, n0)
-                            <= _rules.sse_change(X, L, labels, U, M0, n0))
-                if not accepted:
-                    moves = moves[:0]
-                else:
-                    frac = _rules.crossing_fraction(X[moves], L[moves], pseudo[moves], C, Cs)
-                    U, S, P, oscillating = _rules.undecided(U, S, P, oscillating, moves, frac, pseudo, L)
-                    labels = pseudo
+                labels, U, S, P, oscillating, Cs, rho, moves, accepted, n_extra = pseudo_finish(
+                    X, engine, monitor, L, labels, U, S, P, oscillating, self.rho_max)
+            else:
+                Cs, rho = _rules.long_run_centers(monitor.centers_window(), self.rho_max)
 
         mode = self.center_update
         if mode == "auto":
