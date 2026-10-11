@@ -18,6 +18,7 @@ reaches the same error in less time.
 
     python -m experiments.time_for_error          # experiments/results/time_for_error.csv, docs/figures/fig9_time_for_error.png
     python -m experiments.time_for_error --plot   # redraw the figure from the saved CSV
+    python -m experiments.time_for_error --report # redraw the figure and refill the tables
 """
 from __future__ import annotations
 
@@ -192,20 +193,23 @@ TITLE = {"exact": "Exact Lloyd / Hamerly\nboundary points drift, then settle",
 
 def figure(cv):
     fig, axes = plt.subplots(1, 3, figsize=(15, 5.6))
-    style = {"markov-kmeans (auto)": (SERIES[0], "o", "-", 2.8), "markov-kmeans (t0)": (SERIES[0], "o", "--", 1.6),
+    style = {"markov-kmeans 0.4 (auto)": (SERIES[0], "o", "-", 2.8), "markov-kmeans 0.4 (t0)": (SERIES[0], "o", "--", 1.6),
+             "markov-kmeans (auto)": (INK2, "P", "-", 1.6),
              "sklearn tol": (SERIES[1], "s", "-", 2.0), "Perez-Ortega": (SERIES[2], "^", "-", 2.0),
              "fixed iterations": (SERIES[3], "D", "-", 2.0)}
-    label = {"markov-kmeans (auto)": "Markov-K-means, automatic", "markov-kmeans (t0)": "Markov-K-means, fixed stop + settle",
+    label = {"markov-kmeans 0.4 (auto)": "Markov-K-means 0.4, automatic",
+             "markov-kmeans 0.4 (t0)": "Markov-K-means 0.4, fixed stop",
+             "markov-kmeans (auto)": "Markov-K-means 0.3, automatic (label histories only)",
              "sklearn tol": "scikit-learn tol", "Perez-Ortega": "Pérez-Ortega threshold", "fixed iterations": "fixed iterations"}
     for ax, reg in zip(axes, ("exact", "minibatch", "minibatch_const")):
         d = cv[cv.regime == reg]
-        for fam in FAMILIES:
+        for fam in style:
             q = d[d.family == fam].sort_values("error")
             col, mk, ls, lw = style[fam]
             # keep only the lower envelope: a setting that costs more for a larger error is never chosen
             env = q[q.cost <= q.cost.cummin()]
             ax.plot(env.error * 100, env.cost, color=col, ls=ls, lw=lw, marker=mk, ms=5.5 if lw < 2 else 6.5,
-                    markeredgecolor=SURFACE, markeredgewidth=1, label=label[fam], zorder=4 if "auto" in fam else 3)
+                    markeredgecolor=SURFACE, markeredgewidth=1, label=label[fam], zorder=4 if "0.4 (auto)" in fam else 3)
             if fam in DEFAULTS:
                 dq = q[np.isclose(q.param, DEFAULTS[fam])]
                 ax.scatter(dq.error * 100, dq.cost, s=190, facecolor="none", edgecolor=col, linewidth=2.2, zorder=5)
@@ -227,7 +231,7 @@ def figure(cv):
     h += [plt.Line2D([], [], ls="none", marker="*", ms=15, color=INK2, markeredgecolor=SURFACE),
           plt.Line2D([], [], ls="none", marker="o", ms=13, markerfacecolor="none", markeredgecolor=INK2, markeredgewidth=2)]
     l += ["full run", "default setting"]
-    fig.legend(h, l, loc="lower center", ncol=4, frameon=False, fontsize=11, labelcolor=INK2)
+    fig.legend(h, l, loc="lower center", ncol=3, frameon=False, fontsize=11, labelcolor=INK2)
     fig.tight_layout(rect=(0, 0.12, 1, 1))
     FIG.mkdir(parents=True, exist_ok=True)
     fig.savefig(FIG / "fig9_time_for_error.png", dpi=150)
@@ -236,8 +240,11 @@ def figure(cv):
 
 def main(argv=()):
     plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
-    if "--plot" in argv:
-        figure(curves(pd.read_csv(RESULTS / "time_for_error.csv")))
+    if "--plot" in argv or "--report" in argv:
+        cv = curves(pd.read_csv(RESULTS / "time_for_error.csv"))
+        figure(cv)
+        if "--report" in argv:
+            fill_report(report_tables(cv))
         return None
     warm_up()
     df = pd.concat([sweep(*inst) for inst in INSTANCES], ignore_index=True)

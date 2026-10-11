@@ -6,7 +6,9 @@ the same state. The pseudo step runs on the base algorithm's own state: Hamerly 
 to the stop (bit-identical iterates) so the extra assignment pass is pruned and timed as in
 MarkovKMeans.fit; mini-batch assigns by brute force, as fit does.
 
-    python -m experiments.pseudo_reps        # experiments/results/pseudo_reps.csv, tables in docs/results.md
+    python -m experiments.pseudo_reps          # experiments/results/pseudo_reps.csv, tables in docs/results.md
+    python -m experiments.pseudo_reps --rho    # sensitivity to rho_max (labels only) -> pseudo_reps_rho.csv
+    python -m experiments.pseudo_reps --report # tables from the saved CSVs
 """
 from __future__ import annotations
 
@@ -110,6 +112,42 @@ def analyse(regime, sep, seed, eta):
     return row
 
 
+RHO_MAX = (0.9, 0.95, 0.98, 0.99, 0.995)
+
+
+def rho_sensitivity():
+    """0.4 labels for several rho_max at two automatic stops (default and 10x stricter); no timing."""
+    rows = []
+    for inst in INSTANCES:
+        regime, sep, seed, eta = inst
+        traj, X = trajectory(*inst)
+        if X is None:
+            X, _, _ = datasets.gmm(1_000_000, 16, K, sep=sep, seed=seed)
+        H, C = traj["H"], traj["C"]
+        ref, _ = reference(regime, traj, K)
+        for tol in (1e-3, 1e-4):
+            t, reason, _, _ = replay_stop(traj, _rules.StopParams(unstable_tol=tol, change_tol=tol), regime == "exact",
+                                          "auto", K)
+            if reason == "converged":
+                continue
+            L = H[t].astype(np.int64)
+            lo = max(0, t - W)
+            U = np.flatnonzero((H[lo + 1:t + 1] != H[lo:t]).any(0))
+            Hw = np.ascontiguousarray(H[lo:t + 1][:, U].astype(np.int64))
+            lab_U, S, P, osc = _rules.settle(Hw, L[U], rule="auto", n_clusters=K,
+                                             regime="oscillation" if reason == "oscillation" else "drift")
+            lab3 = L.copy()
+            lab3[U] = lab_U
+            r = dict(instance=name_of(*inst), regime=regime, tol=tol, t=t, error_03=float((lab3 != ref).mean()))
+            for rm in RHO_MAX:
+                out = pseudo_finish(X, _Brute(X, C[t]), SimpleNamespace(centers_window=lambda: C[lo:t + 1]), L, lab3,
+                                    U, S, P, osc, rho_max=rm)
+                r[f"error_{rm:g}"] = float((out[0] != ref).mean())
+                r[f"accepted_{rm:g}"] = bool(out[8])
+            rows.append(r)
+    return pd.DataFrame(rows)
+
+
 RNAME = {"exact": "정확 Lloyd", "minibatch": "mini-batch 1/count", "minibatch_const": "mini-batch 상수 스텝"}
 
 
@@ -138,10 +176,22 @@ def report(df):
     if "moves_p_new" in cols:
         t3 = d[cols].dropna(subset=["moves_p_new"]).rename(columns=names)
         T["pseudo_membership"] = md(t3, "{:.0%}", index_name="사례")
+    f = RESULTS / "pseudo_reps_rho.csv"
+    if f.exists():
+        q = pd.read_csv(f)
+        q.index = [f"{RNAME[r]} · {i.split('-', 1)[1]} · tol {tol:g}" for r, i, tol in zip(q.regime, q.instance, q.tol)]
+        out = pd.DataFrame({"0.3": [f"{v:.3%}" for v in q.error_03]}, index=q.index)
+        for rm in RHO_MAX:
+            out[f"rho_max {rm:g}"] = [f"{e:.3%}" + ("" if a else " (거부)")
+                                      for e, a in zip(q[f"error_{rm:g}"], q[f"accepted_{rm:g}"])]
+        T["pseudo_rho"] = md(out, "{}", index_name="사례 · 정지")
     return T
 
 
 def main(argv=()):
+    if "--rho" in argv:
+        rho_sensitivity().to_csv(RESULTS / "pseudo_reps_rho.csv", index=False)
+        argv = ("--report",)
     if "--report" in argv:
         df = pd.read_csv(RESULTS / "pseudo_reps.csv")
     else:
