@@ -1,0 +1,2 @@
+site,n60,stop_reason,regime,iterations,U_frac,mixed_frac,mixed_frac_in_U,mixed_frac_outside_U,auroc_U,auroc_uncertainty,auroc_distance_ratio,n_fractional
+"Seoul (urban, forest, river)",3323212,stable_drift,drift,79,0.001023106560761095,0.9317019197090044,1.0,0.9316319719309407,0.5005490525129972,0.5000009689161994,0.8113724760948909,6
