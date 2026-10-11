@@ -384,13 +384,14 @@ def run(only=None):
 # ----------------------------------------------------------------------------- report
 
 RULE_NAMES = {"envi_2pct_10": "changed < 2 % or 10 iterations (ENVI)", "pct5_10": "changed < 5 % or 10 iterations",
-              "pct2": "changed < 2 %", "sklearn_tol": "scikit-learn tol", "markov_auto": "Markov-K-means (auto)",
+              "pct2": "changed < 2 %", "sklearn_tol": "scikit-learn tol",
+              "markov_v03": "Markov-K-means 0.3 (label histories only)", "markov_auto": "Markov-K-means 0.4 (default)",
               "full": "to convergence"}
-RULE_NAMES["markov_nomon"] = "Markov-K-means, stopping point only"
+RULE_NAMES["markov_nomon"] = "Markov-K-means 0.4, stopping point only"
 RULE_KO = {"envi_2pct_10": "변경 < 2 % 또는 10회 (ENVI 기본값)", "pct5_10": "변경 < 5 % 또는 10회",
            "pct2": "변경 < 2 % (상한 없음)", "sklearn_tol": "scikit-learn tol (기본값)",
-           "markov_auto": "Markov-K-means (기본값)", "markov_nomon": "Markov-K-means 정지 시점 (감시 비용 제외)",
-           "full": "끝까지 (기준)"}
+           "markov_v03": "Markov-K-means 0.3 (라벨 이력 정리만)", "markov_auto": "Markov-K-means 0.4 (기본값)",
+           "markov_nomon": "Markov-K-means 0.4 정지 시점 (감시 비용 제외)", "full": "끝까지 (기준)"}
 
 
 def report():
@@ -408,7 +409,9 @@ def report():
     nomon["time_frac"] = nomon.seconds / runs.loc[m.index, "total_s"]
     nomon["rule"] = "markov_nomon"
     rules = pd.concat([rules, nomon.reset_index()], ignore_index=True)
-    mix = pd.read_csv(os.path.join(RESULTS, "sentinel2_mixing.csv")).set_index("site")
+    mix_all = pd.read_csv(os.path.join(RESULTS, "sentinel2_mixing.csv"))
+    mix = mix_all[mix_all.representatives == "markov"].set_index("site")
+    mix03 = mix_all[mix_all.representatives == "current"].set_index("site")
     sites = list(runs.index)
     short = {s_: s_.split(" (")[0] for s_ in sites}
     plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
@@ -437,13 +440,20 @@ def report():
 
     ax = axes[1]
     style = {"envi_2pct_10": (SERIES[1], "s"), "pct5_10": (SERIES[3], "D"), "pct2": (SERIES[4], "v"),
-             "sklearn_tol": (SERIES[2], "^"), "markov_auto": (SERIES[0], "o")}
+             "sklearn_tol": (SERIES[2], "^"), "markov_v03": (SERIES[5], "P"), "markov_auto": (SERIES[0], "o")}
     for rule, (col, mk) in style.items():
         d = rules[rules.rule == rule]
         ax.scatter(d.time_frac, d.error.clip(lower=1e-6) * 100, color=col, marker=mk, s=28, alpha=0.6,
                    edgecolor="none")
         ax.scatter([d.time_frac.median()], [d.error.median() * 100], color=col, marker=mk, s=150,
                    edgecolor=INK, linewidth=1.2, zorder=5, label=RULE_NAMES[rule])
+    # the same stop finished two ways: link each scene's 0.3 and 0.4 results
+    a = rules[rules.rule == "markov_v03"].set_index("site")
+    b = rules[rules.rule == "markov_auto"].set_index("site")
+    for s_ in a.index.intersection(b.index):
+        ax.plot([a.loc[s_, "time_frac"], b.loc[s_, "time_frac"]],
+                [max(a.loc[s_, "error"], 1e-6) * 100, max(b.loc[s_, "error"], 1e-6) * 100],
+                color=GRID, lw=1, zorder=1)
     ax.set_yscale("log")
     _style(ax, "Time and error of each stopping rule", "labels differing from the converged run (%, log)",
            "time / run to convergence (large marker: median over scenes)")
@@ -468,6 +478,8 @@ def report():
                                index_name="장면")
     agg = {}
     for rule in RULES[:-1] + ("markov_nomon", "full"):
+        if rule == "markov_v03" and "markov_v03" not in set(rules.rule):
+            continue
         d = rules[rules.rule == rule]
         agg[RULE_KO[rule]] = {"시간 (중앙값)": d.time_frac.median(),
                               "시간 (범위)": f"{d.time_frac.min():.0%}–{d.time_frac.max():.0%}",
@@ -480,11 +492,25 @@ def report():
     u.index = [short[s_] for s_ in u.index]
     u.columns = ["미결정 비율", "미결정 중 틀린 비율", "틀린 점 중 미결정 비율", "미결정: 유지 오차", "미결정: 정리 오차"]
     T["sentinel2_unstable"] = md(u, "{:.2%}", index_name="장면")
+    if "pseudo_s" in runs:
+        e03 = rules[rules.rule == "markov_v03"].set_index("site").error
+        e04 = rules[rules.rule == "markov_auto"].set_index("site").error
+        p = pd.DataFrame({"오차: 0.3": e03, "오차: 0.4": e04,
+                          "고친 화소": runs.fixed, "망친 화소": runs.broken, "옮긴 화소": runs.moves_frac,
+                          "옮긴 화소 중 맞은 비율": runs.moves_right,
+                          "틀린 화소 중 미결정: 0.3": runs.U_recall, "틀린 화소 중 미결정: 0.4": runs.undecided_recall,
+                          "추가 시간": runs.pseudo_s / runs.total_s, "ρ 중앙값": runs.rho_median}).loc[sites]
+        p.index = [short[s_] for s_ in p.index]
+        T["sentinel2_pseudo"] = md(p, {"오차: 0.3": "{:.3%}", "오차: 0.4": "{:.3%}", "고친 화소": "{:,.0f}",
+                                       "망친 화소": "{:,.0f}", "옮긴 화소": "{:.2%}", "옮긴 화소 중 맞은 비율": "{:.0%}",
+                                       "틀린 화소 중 미결정: 0.3": "{:.1%}", "틀린 화소 중 미결정: 0.4": "{:.1%}",
+                                       "추가 시간": "{:.1%}", "ρ 중앙값": "{:.2f}"}, index_name="장면")
     m = mix.reindex(columns=["U_frac", "mixed_frac_in_U", "mixed_frac_outside_U", "auroc_U", "auroc_uncertainty",
                              "auroc_distance_ratio", "n_fractional"]).copy()
+    m.insert(3, "auroc_U_03", mix03.reindex(m.index).auroc_U if len(mix03) else np.nan)
     m.index = [short[s_] for s_ in m.index]
-    m.columns = ["미결정 비율", "혼합 화소 비율: 미결정", "혼합 화소 비율: 나머지", "AUROC: 미결정 여부", "AUROC: 1 − max π",
-                 "AUROC: 거리 비", "분수형 소속도를 받은 화소 수"]
+    m.columns = ["미결정 비율", "혼합 화소 비율: 미결정", "혼합 화소 비율: 나머지", "AUROC: 미결정 여부 (0.3)",
+                 "AUROC: 미결정 여부 (0.4)", "AUROC: 1 − max π", "AUROC: 거리 비", "분수형 소속도를 받은 화소 수"]
     T["sentinel2_mixing"] = md(m, {c_: ("{:.2f}" if c_.startswith("AUROC") else "{:,.0f}" if c_.startswith("분수형")
                                        else "{:.1%}") for c_ in m.columns},
                                index_name="장면")

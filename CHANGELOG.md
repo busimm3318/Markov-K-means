@@ -12,9 +12,9 @@ that remain undecided.
   the path of each center over the window is fitted as an AR(1) chain
   c_{s+1} = a + rho c_s; its long-run mean a / (1 - rho) is where a converging center is
   heading, or the point a jittering center hovers around. Every point is assigned to its
-  nearest pseudo representative (one extra assignment pass). This moves the points that
-  are about to cross a boundary, which no label history can see because they have not
-  moved yet.
+  nearest pseudo representative (one extra assignment pass, pruned by the Hamerly bounds of
+  the run). This moves the points that are about to cross a boundary, which no label
+  history can see because they have not moved yet.
   * Safeguard: the pseudo labelling is kept only if its SSE (with its own centroids) is not
     above that of the history settlement; otherwise the result is exactly the 0.3 result.
   * The undecided points are now the unstable set plus the predicted movers. A point that
@@ -33,7 +33,9 @@ that remain undecided.
   `decision_trace_[-1]["unstable_frac"]`.
 * `center_update="auto"` on mini-batch uses the pseudo representatives when the pseudo
   labelling was kept (the current centers otherwise, as before).
-* `n_dist_` includes the extra assignment pass (n x n_clusters distances).
+* `n_dist_` includes the extra assignment pass: pruned by the run's Hamerly bounds on the
+  default engine (a few percent of n x n_clusters distances), n x n_clusters on Lloyd and
+  mini-batch. The pass reuses the stopped engine's arrays, so it allocates nothing n-sized.
 * `representatives="current"` reproduces 0.3.1 exactly (checked bit for bit on 108
   configurations of algorithm, stop, settlement rule and center update).
 
