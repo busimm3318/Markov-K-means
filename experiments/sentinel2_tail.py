@@ -343,7 +343,7 @@ def run(only=None):
             df.insert(0, "site", s.site)
             df.to_csv(f, mode="a", header=not os.path.exists(f), index=False)
         pd.DataFrame([dict(site=s.site, **mix)]).to_csv(f_mix, mode="a", header=not os.path.exists(f_mix), index=False)
-        pd.DataFrame([dict(site=s.site, tile=s.tile, item=s.item, cloud_cover=s.cloud_cover, valid_load_s=load_s,
+        pd.DataFrame([dict(site=s.site, tile=s["tile"], item=s["item"], cloud_cover=s["cloud_cover"], valid_load_s=load_s,
                            **extra)]).to_csv(f_runs, mode="a", header=not os.path.exists(f_runs), index=False)
         print(rules.round(5).to_string(index=False), flush=True)
         print({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in {**extra, **mix}.items()}, flush=True)
