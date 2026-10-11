@@ -69,6 +69,20 @@ Each line is one stopping rule with its own setting swept. Every setting is appl
 
 In short, each unit of error costs Markov-K-means the least time when training oscillates. With 1/count mini-batch it costs about the same as the other rules, and on exact Lloyd slightly more than a threshold tuned for the data.
 
+### On real satellite images
+
+![Convergence tail and stopping rules on twelve Sentinel-2 scenes](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/fig10_sentinel2_tail.png)
+
+Twelve Sentinel-2 scenes from very different landscapes, each with about thirty million pixels, were clustered with exact K-means until no pixel changed. Every stopping rule was judged on the same run.
+
+| stopping rule | where it stops | how far from the converged map |
+|---|---|---|
+| remote-sensing default: fewer than 2 % of pixels changed, or 10 iterations | very early | a large share of pixels labelled differently, though the aggregate fit is close |
+| scikit-learn tolerance | about a third of the way | usually close, but far off when clusters reorganise late |
+| Markov-K-means | later, at a point that differs from scene to scene | close to the converged map in every scene |
+
+The tail is real on satellite images, and the right number of iterations varies so much between scenes that no fixed setting reaches the converged map everywhere. Markov-K-means is the only rule that gets there in every scene without tuning. The time it saves is moderate, because late iterations on low-dimensional imagery are already cheap. Its undecided list and soft memberships carry little information here: the scenes settle by drift, and a simple distance ratio flags mixed pixels better.
+
 ### Where it applies
 
 | base algorithm | boundary points | what Markov-K-means adds |
@@ -93,7 +107,8 @@ r.labels, r.dense(n_clusters), r.uncertainty
 |---|---|
 | Large data with a long convergence tail | The tail is cut without tuning. The result differs from the converged one only on a few boundary points. |
 | Constant-step, EMA or online training | A stopping point that no other rule finds. Labels better than the run's last state, and memberships that reflect time spent in each cluster. |
-| You need to know which points are uncertain | A list of undecided points with soft memberships, ready for review, a more expensive model, or a downstream step that accepts soft assignments. |
+| Large imagery, such as satellite scenes, when you need the converged map without tuning per scene | It stops close to the converged map in every scene, where fixed thresholds stop too early on some scenes and needlessly late on others. |
+| Mini-batch or oscillating training where you need to know which points are uncertain | A list of undecided points with soft memberships, ready for review, a more expensive model, or a downstream step that accepts soft assignments. After exact Lloyd the list is short and mostly correct, so it says little. |
 | One setting must serve many datasets | Defaults that stay near the best trade-off whether the run drifts or oscillates. |
 
 ### When not to use it
@@ -102,7 +117,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 |---|---|---|
 | Small or easy data | Monitoring and the observation window are pure overhead; the run is slightly slower than plain K-means. | plain K-means |
 | Exact Lloyd with a threshold already tuned for this kind of data | The tuned threshold is slightly cheaper for the same error. | the tuned threshold |
-| Only aggregate quality matters: colour palettes, inertia, compression quality | The aggregate settles long before individual points do, but the rule waits for the points. | fit on a sample, or a short fixed run |
+| Only aggregate quality matters: colour palettes, inertia, compression quality, a rough land-cover map | The aggregate settles long before individual points do, but the rule waits for the points. | fit on a sample, or a short fixed run |
 | Codebooks that jitter strongly, such as EMA VQ codebooks in image tokenizers | The rule rightly never intervenes, so monitoring costs time and saves nothing. | plain training; distance-based soft tokens |
 | You need the exact converged partition | It stops early by design. | run to convergence |
 | A rough answer from 1/count mini-batch | Waiting for the observation window costs more than it saves. | a short fixed number of epochs |
@@ -193,6 +208,20 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 
 정리하면, 오차 한 단위를 줄이는 데 드는 시간은 진동하는 학습에서 Markov-K-means가 가장 적다. 1/count mini-batch에서는 다른 규칙과 비슷하고, exact Lloyd에서 데이터에 맞춰 조정한 임계값과 비교하면 조금 더 든다.
 
+### 실제 위성영상에서
+
+![Sentinel-2 장면 12개의 수렴 꼬리와 정지 규칙](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/fig10_sentinel2_tail.png)
+
+지형이 전혀 다른 Sentinel-2 장면 12개(장면마다 화소 약 3천만 개)를 라벨이 하나도 바뀌지 않을 때까지 exact K-means로 군집하고, 같은 실행 위에서 정지 규칙들을 판정했다.
+
+| 정지 규칙 | 멈추는 곳 | 수렴한 지도와의 차이 |
+|---|---|---|
+| 원격탐사 기본값: 라벨이 바뀐 화소 2% 미만 또는 10회 | 매우 이른 시점 | 다른 라벨을 받은 화소가 많다. 전체 적합도는 비슷하다 |
+| scikit-learn tol | 대략 3분의 1 지점 | 대개 가깝지만, 군집이 늦게 재편되는 장면에서는 크게 틀린다 |
+| Markov-K-means | 더 늦게, 장면마다 다른 시점 | 모든 장면에서 수렴한 지도에 가깝다 |
+
+위성영상에도 꼬리가 분명히 있고, 알맞은 반복 수가 장면마다 크게 달라서 고정된 설정 하나로는 모든 장면에서 수렴 결과에 닿지 못한다. 조정 없이 모든 장면에서 그곳에 닿는 규칙은 Markov-K-means뿐이다. 다만 저차원 영상에서는 늦은 반복이 원래 싸서 절약되는 시간은 크지 않다. 미결정 목록과 soft 소속도는 여기서 정보가 거의 없다. 장면들이 표류 후 정착하는 체제여서, 혼합 화소는 단순한 거리 비가 더 잘 가려낸다.
+
 ### 적용 가능한 알고리즘
 
 | 기반 알고리즘 | 경계 점의 거동 | Markov-K-means가 더하는 것 |
@@ -217,7 +246,8 @@ r.labels, r.dense(n_clusters), r.uncertainty
 |---|---|
 | 수렴 꼬리가 긴 대용량 데이터 | 조정 없이 꼬리가 끊긴다. 결과는 수렴한 결과와 경계의 소수 점에서만 다르다. |
 | 고정 학습률, EMA, 온라인 학습 | 다른 규칙이 찾지 못하는 정지 시점을 얻는다. 라벨은 마지막 상태보다 정확하고, 소속도는 군집별로 머문 시간을 나타낸다. |
-| 어떤 점이 불확실한지 알아야 할 때 | soft 소속도가 붙은 미결정 점 목록을 얻는다. 사람 검토, 더 비싼 모델, soft 배정을 받는 후속 단계로 바로 넘길 수 있다. |
+| 위성영상 같은 대용량 영상에서 장면마다 조정하지 않고 수렴한 지도가 필요할 때 | 모든 장면에서 수렴한 지도 가까이에서 멈춘다. 고정 임계값은 어떤 장면에서는 너무 일찍, 어떤 장면에서는 쓸데없이 늦게 멈춘다. |
+| mini-batch나 진동하는 학습에서 어떤 점이 불확실한지 알아야 할 때 | soft 소속도가 붙은 미결정 점 목록을 얻는다. 사람 검토, 더 비싼 모델, soft 배정을 받는 후속 단계로 바로 넘길 수 있다. exact Lloyd 뒤에는 목록이 짧고 대부분 맞는 점이라 정보가 적다. |
 | 설정 하나로 여러 데이터를 처리해야 할 때 | 표류든 진동이든 최적 교환선 가까이에 놓이는 기본값을 쓸 수 있다. |
 
 ### 이럴 때는 오히려 독이 된다
@@ -226,7 +256,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 |---|---|---|
 | 작거나 쉬운 데이터 | 감시와 관찰 창이 순수한 추가 비용이 되어, 그냥 K-means보다 약간 느리다. | 그냥 K-means |
 | 같은 종류의 데이터에 맞춰 임계값을 이미 조정해 둔 exact Lloyd | 같은 오차를 조정된 임계값이 조금 더 싸게 얻는다. | 조정된 임계값 |
-| 색 팔레트, inertia, 압축 화질처럼 전체 품질만 중요할 때 | 집계 지표는 점들보다 훨씬 먼저 안정되는데, 규칙은 점 하나하나를 기다린다. | 표본 학습, 짧은 고정 반복 |
+| 색 팔레트, inertia, 압축 화질, 대략적인 토지피복 지도처럼 전체 품질만 중요할 때 | 집계 지표는 점들보다 훨씬 먼저 안정되는데, 규칙은 점 하나하나를 기다린다. | 표본 학습, 짧은 고정 반복 |
 | 이미지 토크나이저의 EMA VQ 코드북처럼 크게 흔들리는 코드북 | 규칙이 개입하지 않는 것이 옳으므로, 감시 비용만 들고 절감은 없다. | 일반 학습, 거리 기반 soft 토큰 |
 | 정확히 수렴한 분할이 필요할 때 | 설계상 일찍 멈춘다. | 끝까지 수렴 |
 | 1/count mini-batch로 대략적인 답만 필요할 때 | 관찰 창을 기다리는 비용이 아끼는 시간보다 크다. | 짧은 고정 epoch |
