@@ -58,6 +58,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+from numba import njit
 
 from . import _markov as _mk
 
@@ -138,6 +139,58 @@ def _half_nearest(C):
     return 0.5 * D.min(1)
 
 
+@njit(cache=True)
+def _record(labels, prev, dst, last_change, t):
+    """One pass over the labels: store them in the ring buffer, stamp the movers, count them."""
+    moved = 0
+    for i in range(labels.shape[0]):
+        v = labels[i]
+        if v != prev[i]:
+            last_change[i] = t
+            moved += 1
+        dst[i] = v
+    return moved
+
+
+@njit(cache=True)
+def _store(labels, dst):
+    for i in range(labels.shape[0]):
+        dst[i] = labels[i]
+
+
+@njit(cache=True)
+def _sizes(labels, k):
+    out = np.zeros(k, dtype=np.float64)
+    for i in range(labels.shape[0]):
+        out[labels[i]] += 1.0
+    return out
+
+
+@njit(cache=True)
+def _count_recent(last_change, since):
+    m = 0
+    for i in range(last_change.shape[0]):
+        if last_change[i] > since:
+            m += 1
+    return m
+
+
+@njit(cache=True)
+def _recent(last_change, since):
+    """Indices whose last change is after ``since`` (two passes, no n-sized temporaries)."""
+    m = 0
+    for i in range(last_change.shape[0]):
+        if last_change[i] > since:
+            m += 1
+    out = np.empty(m, dtype=np.int64)
+    j = 0
+    for i in range(last_change.shape[0]):
+        if last_change[i] > since:
+            out[j] = i
+            j += 1
+    return out
+
+
 @dataclass
 class StateMonitor:
     """Tracks the run iteration by iteration and decides when the Markov step intervenes."""
@@ -165,14 +218,14 @@ class StateMonitor:
         W = self.params.window
         self.t += 1
         t = self.t
-        lab = np.asarray(labels).astype(self.H.dtype, copy=False)
+        lab = np.ascontiguousarray(labels)
         if t > 0:
-            moved = lab != self.H[(t - 1) % (W + 1)]
-            self.last_change[moved] = t
-            self.counts.append(int(moved.sum()) if changed is None else int(changed))
+            moved = _record(lab, self.H[(t - 1) % (W + 1)], self.H[t % (W + 1)], self.last_change, t)
+            self.counts.append(int(moved) if changed is None else int(changed))
             step = np.sqrt(((centers - self._C) ** 2).sum(1))
             self.drift.append(float((step / _half_nearest(centers)).max()))
-        self.H[t % (W + 1)] = lab
+        else:
+            _store(lab, self.H[0])
         self._C = np.array(centers, dtype=np.float64, copy=True)
         if self._Cring is None:
             self._Cring = np.empty((W + 1,) + self._C.shape)
@@ -197,7 +250,7 @@ class StateMonitor:
         return self.H[np.ix_(rows, idx)]
 
     def unstable(self):
-        return np.flatnonzero(self.last_change > self.t - self.params.window)
+        return _recent(self.last_change, self.t - self.params.window)
 
     def assess(self):
         """Return (stop, regime, state) for the current iteration."""
@@ -208,8 +261,7 @@ class StateMonitor:
             return self._log(True, "converged", state)
         if t < max(p.min_iter, W):
             return self._log(False, "running", state)
-        U = self.unstable()
-        u = len(U) / self.n
+        u = _count_recent(self.last_change, t - W) / self.n
         state["unstable_frac"] = u
         if u <= p.unstable_tol:
             return self._log(True, "drift", state)
@@ -226,9 +278,10 @@ class StateMonitor:
         if not reps:
             return self._log(False, "running", state)
         # partitions
+        U = self.unstable()
         cur = self.H[t % (W + 1)]
-        sizes = np.bincount(cur, minlength=self.k).astype(float)
-        old = np.bincount(self.H[(t - W) % (W + 1)], minlength=self.k).astype(float)
+        sizes = _sizes(cur, self.k)
+        old = _sizes(self.H[(t - W) % (W + 1)], self.k)
         cl_unstable = float((np.bincount(cur[U], minlength=self.k) / np.maximum(sizes, 1)).max())
         size_change = float((np.abs(sizes - old) / np.maximum(old, 1)).max())
         Hw = self.window(U)

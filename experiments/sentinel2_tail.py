@@ -288,7 +288,8 @@ def mixing(cube, valid, k=K, seed=SEED):
     share = np.zeros((len(X60), k))
     np.add.at(share, (np.repeat(np.arange(len(X60)), 9), lab_sub.ravel()), 1.0 / 9)
     purity = share.max(1)
-    mixed = purity < 1.0 - 1e-9
+    mixed_any = purity < 1.0 - 1e-9
+    mixed = purity <= 6 / 9 + 1e-9          # strong mixing: the majority class covers at most 6 of 9 sub-pixels
     D = mk.transform(X60)
     D.sort(1)
     ratio = D[:, 0] / np.maximum(D[:, 1], 1e-12)      # geometric ambiguity: near 1 = between two centers
@@ -297,7 +298,7 @@ def mixing(cube, valid, k=K, seed=SEED):
     unc = np.zeros(len(X60))
     unc[mk.unstable_indices_] = mk.uncertainty_
     out = dict(n60=len(X60), stop_reason=mk.stop_reason_, regime=mk.regime_, iterations=mk.n_iter_,
-               U_frac=float(inU.mean()), mixed_frac=float(mixed.mean()),
+               U_frac=float(inU.mean()), mixed_any_frac=float(mixed_any.mean()), mixed_frac=float(mixed.mean()),
                mixed_frac_in_U=float(mixed[inU].mean()) if inU.any() else np.nan,
                mixed_frac_outside_U=float(mixed[~inU].mean()),
                auroc_U=float(roc_auc_score(mixed, inU)) if inU.any() else np.nan,

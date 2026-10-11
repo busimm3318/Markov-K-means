@@ -266,3 +266,22 @@ def test_monitor_waits_while_centers_travel_under_jitter():
     t, (stop, regime, state) = _run(mon, 60, labels, centers(0.0))
     assert stop and regime == "oscillation", state
     assert state["center_travel"] <= params.travel_ratio
+
+
+def test_monitor_kernels_match_numpy():
+    """The compiled bookkeeping of the monitor gives what the plain numpy expressions give."""
+    rng = np.random.default_rng(5)
+    prev = rng.integers(0, 7, 5000).astype(np.uint8)
+    lab = prev.astype(np.int64)
+    lab[rng.choice(5000, 300, replace=False)] = rng.integers(0, 7, 300)
+    dst = np.empty_like(prev)
+    last = rng.integers(-1, 4, 5000).astype(np.int32)
+    expect_last = last.copy()
+    expect_last[lab != prev] = 9
+    moved = _rules._record(lab, prev, dst, last, 9)
+    assert moved == int((lab != prev).sum())
+    np.testing.assert_array_equal(dst, lab.astype(np.uint8))
+    np.testing.assert_array_equal(last, expect_last)
+    np.testing.assert_array_equal(_rules._sizes(dst, 7), np.bincount(dst, minlength=7))
+    np.testing.assert_array_equal(_rules._recent(last, 2), np.flatnonzero(last > 2))
+    assert _rules._count_recent(last, 2) == int((last > 2).sum())
