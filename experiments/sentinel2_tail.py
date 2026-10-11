@@ -440,7 +440,7 @@ def report():
 
     ax = axes[1]
     style = {"envi_2pct_10": (SERIES[1], "s"), "pct5_10": (SERIES[3], "D"), "pct2": (SERIES[4], "v"),
-             "sklearn_tol": (SERIES[2], "^"), "markov_v03": (SERIES[5], "P"), "markov_auto": (SERIES[0], "o")}
+             "sklearn_tol": (SERIES[2], "^"), "markov_v03": (INK2, "P"), "markov_auto": (SERIES[0], "o")}
     for rule, (col, mk) in style.items():
         d = rules[rules.rule == rule]
         ax.scatter(d.time_frac, d.error.clip(lower=1e-6) * 100, color=col, marker=mk, s=28, alpha=0.6,
