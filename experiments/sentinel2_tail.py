@@ -348,9 +348,112 @@ def run(only=None):
         print({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in {**extra, **mix}.items()}, flush=True)
 
 
+# ----------------------------------------------------------------------------- report
+
+RULE_NAMES = {"envi_2pct_10": "changed < 2 % or 10 iterations (ENVI)", "pct5_10": "changed < 5 % or 10 iterations",
+              "pct2": "changed < 2 %", "sklearn_tol": "scikit-learn tol", "markov_auto": "Markov-K-means (auto)",
+              "full": "to convergence"}
+RULE_KO = {"envi_2pct_10": "변경 < 2 % 또는 10회 (ENVI 기본값)", "pct5_10": "변경 < 5 % 또는 10회",
+           "pct2": "변경 < 2 % (상한 없음)", "sklearn_tol": "scikit-learn tol (기본값)",
+           "markov_auto": "Markov-K-means (기본값)", "full": "끝까지 (기준)"}
+
+
+def report():
+    from experiments.analyze_markov_tail import FIG, GRID, INK, INK2, SERIES, SURFACE, _style, fill_report, md, plt
+
+    rules = pd.read_csv(os.path.join(RESULTS, "sentinel2_rules.csv"))
+    curves = pd.read_csv(os.path.join(RESULTS, "sentinel2_curves.csv"))
+    runs = pd.read_csv(os.path.join(RESULTS, "sentinel2_runs.csv")).set_index("site")
+    mix = pd.read_csv(os.path.join(RESULTS, "sentinel2_mixing.csv")).set_index("site")
+    sites = list(runs.index)
+    short = {s_: s_.split(" (")[0] for s_ in sites}
+    plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5.6))
+    ax = axes[0]
+    for s_ in sites:
+        c = curves[curves.site == s_]
+        ax.plot(c.t, c.changed_share.clip(lower=1e-9) * 100, color=INK2, lw=1, alpha=0.55)
+        r = rules[(rules.site == s_)].set_index("rule")
+        for rule, col, mk in (("envi_2pct_10", SERIES[1], "s"), ("markov_auto", SERIES[0], "o")):
+            t_ = int(r.loc[rule, "iterations"])
+            y = c[c.t == t_].changed_share.clip(lower=1e-9).iloc[0] * 100
+            ax.scatter([t_], [y], color=col, marker=mk, s=40, zorder=4, edgecolor=SURFACE, linewidth=1)
+    ax.axhline(2, color=SERIES[1], lw=1, ls="--")
+    ax.axhline(5, color=SERIES[3], lw=1, ls="--")
+    ax.axvline(10, color=GRID, lw=1.5, ls=":")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.scatter([], [], color=SERIES[1], marker="s", label="ENVI rule stops (2 % or 10 iterations)")
+    ax.scatter([], [], color=SERIES[0], marker="o", label="Markov-K-means stops")
+    ax.plot([], [], color=INK2, lw=1, label="one Sentinel-2 scene")
+    _style(ax, "Pixels changing cluster per iteration (12 scenes, k = 12)", "pixels changing cluster (%, log)",
+           "iteration (log)")
+    ax.legend(frameon=False, fontsize=9, labelcolor=INK2, loc="lower left")
+
+    ax = axes[1]
+    style = {"envi_2pct_10": (SERIES[1], "s"), "pct5_10": (SERIES[3], "D"), "pct2": (SERIES[4], "v"),
+             "sklearn_tol": (SERIES[2], "^"), "markov_auto": (SERIES[0], "o")}
+    for rule, (col, mk) in style.items():
+        d = rules[rules.rule == rule]
+        ax.scatter(d.time_frac, d.error.clip(lower=1e-6) * 100, color=col, marker=mk, s=28, alpha=0.6,
+                   edgecolor="none")
+        ax.scatter([d.time_frac.median()], [d.error.median() * 100], color=col, marker=mk, s=150,
+                   edgecolor=INK, linewidth=1.2, zorder=5, label=RULE_NAMES[rule])
+    ax.set_yscale("log")
+    _style(ax, "Time and error of each stopping rule", "labels differing from the converged run (%, log)",
+           "time / run to convergence (large marker: median over scenes)")
+    ax.legend(frameon=False, fontsize=9, labelcolor=INK2, loc="upper right")
+    fig.tight_layout()
+    fig.savefig(FIG / "fig10_sentinel2_tail.png", dpi=150)
+    plt.close(fig)
+
+    T = {}
+    rows = {}
+    for s_ in sites:
+        r = rules[rules.site == s_].set_index("rule")
+        c = curves[curves.site == s_].set_index("t")
+        cap = bool(r.loc["envi_2pct_10", "iterations"] == 10 and c.loc[10, "changed_share"] >= 0.02) if 10 in c.index else False
+        rows[short[s_]] = {"화소 수 (백만)": runs.loc[s_, "n"] / 1e6, "수렴 반복": runs.loc[s_, "total_iter"],
+                           "수렴 여부": "예" if runs.loc[s_, "converged"] else "상한",
+                           "ENVI 정지": f"{int(r.loc['envi_2pct_10', 'iterations'])}" + (" (상한)" if cap else ""),
+                           "2 % 도달": int(r.loc["pct2", "iterations"]),
+                           "Markov 정지": f"{int(r.loc['markov_auto', 'iterations'])} ({runs.loc[s_, 'markov_reason']})"}
+    T["sentinel2_scenes"] = md(pd.DataFrame(rows).T, {"화소 수 (백만)": "{:.1f}", "수렴 반복": "{:.0f}", "수렴 여부": "{}",
+                                                      "ENVI 정지": "{}", "2 % 도달": "{:.0f}", "Markov 정지": "{}"},
+                               index_name="장면")
+    agg = {}
+    for rule in RULES:
+        d = rules[rules.rule == rule]
+        agg[RULE_KO[rule]] = {"시간 (중앙값)": d.time_frac.median(),
+                              "시간 (범위)": f"{d.time_frac.min():.0%}–{d.time_frac.max():.0%}",
+                              "오차 (중앙값)": d.error.median(), "오차 (최대)": d.error.max(),
+                              "SSE 초과 (중앙값)": d.sse_excess.median()}
+    T["sentinel2_rules"] = md(pd.DataFrame(agg).T, {"시간 (중앙값)": "{:.0%}", "시간 (범위)": "{}", "오차 (중앙값)": "{:.2%}",
+                                                    "오차 (최대)": "{:.2%}", "SSE 초과 (중앙값)": "{:.3%}"},
+                              index_name="정지 규칙")
+    u = runs[["U_frac", "U_precision", "U_recall", "U_error_keep", "U_error_markov"]].copy()
+    u.index = [short[s_] for s_ in u.index]
+    u.columns = ["미결정 비율", "미결정 중 틀린 비율", "틀린 점 중 미결정 비율", "미결정: 유지 오차", "미결정: 정리 오차"]
+    T["sentinel2_unstable"] = md(u, "{:.2%}", index_name="장면")
+    m = mix[["U_frac", "mixed_frac_in_U", "mixed_frac_outside_U", "auroc_U", "auroc_uncertainty", "auroc_distance_ratio",
+             "corr_pi_share"]].copy()
+    m.index = [short[s_] for s_ in m.index]
+    m.columns = ["미결정 비율", "혼합 화소 비율: 미결정", "혼합 화소 비율: 나머지", "AUROC: 미결정 여부", "AUROC: 1 − max π",
+                 "AUROC: 거리 비", "상관: π와 하위 화소 비율"]
+    T["sentinel2_mixing"] = md(m, {c_: ("{:.2f}" if c_.startswith(("AUROC", "상관")) else "{:.1%}") for c_ in m.columns},
+                               index_name="장면")
+    fill_report(T)
+    for k_, v in T.items():
+        print(f"== {k_}\n{v}")
+    return T
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
     if cmd == "select":
         select()
     elif cmd == "run":
         run(sys.argv[2:] or None)
+    elif cmd == "report":
+        report()

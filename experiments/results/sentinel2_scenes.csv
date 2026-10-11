@@ -1,0 +1,13 @@
+site,tile,item,url,cloud_cover,nodata,datetime
+"Seoul (urban, forest, river)",52SCG,S2A_52SCG_20241112_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/52/S/CG/2024/11/S2A_52SCG_20241112_0_L2A/,0.161406,3e-05,2024-11-12T02:27:11.227000Z
+Iowa (row crops),15TVG,S2B_15TVG_20241101_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/T/VG/2024/11/S2B_15TVG_20241101_0_L2A/,0.000206,3e-06,2024-11-01T17:12:06.217000Z
+Central Valley (irrigated farms),11SKA,S2B_11SKA_20241012_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/11/S/KA/2024/10/S2B_11SKA_20241012_0_L2A/,0.000269,0.0,2024-10-12T18:54:18.557000Z
+Sahara (sand and rock desert),31REK,S2A_31REK_20240101_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/31/R/EK/2024/1/S2A_31REK_20240101_0_L2A/,0.0,0.0,2024-01-01T10:33:34.441000Z
+"Nile Delta (farms, desert, cities)",36RUV,S2B_36RUV_20240711_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/36/R/UV/2024/7/S2B_36RUV_20240711_0_L2A/,0.002369,0.0,2024-07-11T08:41:39.810000Z
+"Netherlands (polders, water, towns)",31UFU,S2B_31UFU_20240812_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/31/U/FU/2024/8/S2B_31UFU_20240812_0_L2A/,0.009847,0.0,2024-08-12T10:56:27.289000Z
+"Swiss Alps (mountains, snow, glaciers)",32TMS,S2B_32TMS_20241231_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/32/T/MS/2024/12/S2B_32TMS_20241231_0_L2A/,0.254018,0.976175,2024-12-31T10:28:04.379000Z
+"Finland (boreal forest, lakes)",35VMJ,S2A_35VMJ_20240518_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/V/MJ/2024/5/S2A_35VMJ_20240518_0_L2A/,0.046711,0.879921,2024-05-18T09:43:24.043000Z
+Ganges Plain (smallholder farms),44RNQ,S2A_44RNQ_20240217_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/44/R/NQ/2024/2/S2A_44RNQ_20240217_0_L2A/,0.000328,0.0,2024-02-17T05:21:25.448000Z
+Central Australia (arid savanna),53KLP,S2A_53KLP_20240412_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/53/K/LP/2024/4/S2A_53KLP_20240412_0_L2A/,0.0,0.240633,2024-04-12T01:23:55.430000Z
+"Sundarbans (mangroves, estuaries)",45QYE,S2A_45QYE_20230312_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/45/Q/YE/2023/3/S2A_45QYE_20230312_0_L2A/,0.000559,2.692967,2023-03-12T04:42:26.618000Z
+"Amazon (rainforest, river)",20MQB,S2A_20MQB_20240807_0_L2A,https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/20/M/QB/2024/8/S2A_20MQB_20240807_0_L2A/,0.083902,0.0,2024-08-07T14:33:36.367000Z
