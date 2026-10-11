@@ -49,6 +49,7 @@ DEFAULTS = {"markov-kmeans 0.4 (auto)": 1e-3, "markov-kmeans (auto)": 1e-3, "skl
 class _Brute(_BruteNearest):
     def __init__(self, X, C):
         self.X, self.centers = X, C
+        self.labels = np.full(X.shape[0], -1, dtype=np.int64)
 
 
 def finish_04(X, eng, H, C, t, regime_name, rule):
@@ -71,7 +72,8 @@ def finish_04(X, eng, H, C, t, regime_name, rule):
             regime = "oscillation" if (_rules.switches(Hw) >= 2).mean() >= _rules.StopParams().osc_share else "drift"
         lab_U, S, P, osc = _rules.settle(Hw, L[U], rule=rule, n_clusters=K, regime=regime)
         lab[U] = lab_U
-    out = pseudo_finish(X, eng, SimpleNamespace(centers_window=lambda: C[lo:t + 1]), L, lab, U, S, P, osc)
+    out = pseudo_finish(X, eng, SimpleNamespace(centers_window=lambda: C[lo:t + 1]), L, lab, U, S, P, osc,
+                        inplace=True)
     return out[0], time.perf_counter() - t0, out[8]
 
 
@@ -123,7 +125,11 @@ def sweep(regime, sep, seed, eta):
                 eng.step()
                 t_eng += 1
             assert np.array_equal(eng.labels, H[t]) and np.array_equal(eng.centers, C[t])
+        if exact:
+            saved = (eng.labels.copy(), eng.u.copy(), eng.l.copy())    # fit runs the pseudo step in place
         lab, s, acc = finish_04(X, eng if exact else _Brute(X, C[t]), H, C, t, regime_name, rule)
+        if exact:
+            eng.labels, eng.u, eng.l = saved
         add(fam, par, t, extra + s, err(lab))
         rows[-1]["accepted"] = acc
     var = float(np.var(X, axis=0).mean())

@@ -67,7 +67,7 @@ def analyse(regime, sep, seed, eta):
     settle_s = time.perf_counter() - t0
     t0 = time.perf_counter()
     lab4, U4, S4, P4, _, Cs, rho, moves, accepted, nd = pseudo_finish(
-        X, eng, SimpleNamespace(centers_window=lambda: C[lo:t + 1]), L, lab3, U, S, P, osc)
+        X, eng, SimpleNamespace(centers_window=lambda: C[lo:t + 1]), L, lab3, U, S, P, osc, inplace=True)
     pseudo_s = time.perf_counter() - t0
 
     full = secs[T - 1]

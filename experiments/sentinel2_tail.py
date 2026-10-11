@@ -226,12 +226,15 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
                     lab = L.copy()
                     lab[U] = lab_U
                 settle_s = time.perf_counter() - t_s
+                saved = (eng.labels.copy(), eng.u.copy(), eng.l.copy())   # fit runs this step in place
                 t_s = time.perf_counter()
                 if regime == "converged":
                     lab4, U4, moves, accepted, rho = lab, U, U, False, np.zeros(k)
                 else:
-                    lab4, U4, _, _, _, _, rho, moves, accepted, _ = pseudo_finish(X, eng, mon, L, lab, U, S, P, osc)
+                    lab4, U4, _, _, _, _, rho, moves, accepted, _ = pseudo_finish(X, eng, mon, L, lab, U, S, P, osc,
+                                                                                  inplace=True)
                 pseudo_s = time.perf_counter() - t_s
+                eng.labels, eng.u, eng.l = saved
                 markov = dict(t=t, regime=regime, reason=("few_unstable" if regime == "drift" and
                                                           state.get("unstable_frac", 1) <= mon.params.unstable_tol
                                                           else {"drift": "stable_drift"}.get(regime, regime)),

@@ -23,17 +23,18 @@ _REPRESENTATIVES = ("markov", "current")
 _CENTER_UPDATES = ("auto", "hard", "soft", "pseudo", "none")
 
 
-def pseudo_finish(X, engine, monitor, L, labels, U, S, P, oscillating, rho_max=0.95):
+def pseudo_finish(X, engine, monitor, L, labels, U, S, P, oscillating, rho_max=0.95, inplace=False):
     """Center chains -> pseudo representatives -> assignment, kept if it does not raise the SSE.
 
     ``L`` are the engine's labels at the stop and ``(labels, U, S, P, oscillating)`` the
     history settlement. Returns ``(labels, U, S, P, oscillating, pseudo_centers, rho, moves,
     accepted, n_dist)``: when the pseudo labelling is rejected the settlement comes back
-    unchanged, with no moves.
+    unchanged, with no moves. ``inplace=True`` lets the engine reuse its own arrays (it is
+    done once the run has stopped), which saves copying them on large data.
     """
     C = engine.centers
     Cs, rho = _rules.long_run_centers(monitor.centers_window(), rho_max)
-    pseudo, n_dist = engine.nearest(Cs)
+    pseudo, n_dist = engine.nearest(Cs, inplace=inplace)
     moves = np.flatnonzero(pseudo != L)
     M0, n0 = compute_centers(X, L, C)
     accepted = (_rules.sse_change(X, L, pseudo, moves, M0, n0)
@@ -325,7 +326,7 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
         if stop_reason != "converged" and monitor.t >= 2 and W >= 2:
             if self.representatives == "markov":
                 labels, U, S, P, oscillating, Cs, rho, moves, accepted, n_extra = pseudo_finish(
-                    X, engine, monitor, L, labels, U, S, P, oscillating, self.rho_max)
+                    X, engine, monitor, L, labels, U, S, P, oscillating, self.rho_max, inplace=True)
             else:
                 Cs, rho = _rules.long_run_centers(monitor.centers_window(), self.rho_max)
 
