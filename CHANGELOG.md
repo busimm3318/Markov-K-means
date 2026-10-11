@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.1
+
+### Changed
+* **Faster state monitor on large data.** Recording the labels, stamping the points that
+  moved, counting cluster sizes and finding the recently moved points are now single
+  compiled passes instead of several n-sized numpy passes (the cluster-size count alone
+  took over a second per judgement at thirty million points). The unstable share is
+  counted without building the index list unless the partition test needs it.
+  Decisions are unchanged: identical traces on all ten cached trajectories of the
+  automatic-rule study. On Sentinel-2 scenes of thirty million pixels the monitor's cost
+  per iteration fell from about half a second to about a tenth.
+* Package author metadata: Dongsu Shim.
+
+### Evaluation
+* Real satellite images (docs/results.md, section 9): twelve Sentinel-2 scenes of about
+  thirty million pixels each. The automatic rule stopped within 0.5 % of the converged
+  partition in every scene without tuning, where the remote-sensing default (fewer than
+  2 % changed or 10 iterations) differed by a median of 23 % and scikit-learn's default by
+  up to 34 %.
+
 ## 0.3.0
 
 Development status is now **Beta**: parameter names, defaults and fitted attributes are

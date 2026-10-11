@@ -368,6 +368,21 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
   </ul>
 </section>
 
+<section id="sentinel2">
+  <header><div class="eyebrow">응용 3 · 실제 위성영상 (Sentinel-2)</div><h2>꼬리는 실재하고, 조정 없이 수렴 결과 근처에서 멈추는 규칙은 하나뿐이다</h2></header>
+  <p class="prose">지표 피복이 다른 12곳의 Sentinel-2 L2A 장면(110 km 타일, 20 m, 반사율 10개 밴드, 장면당 화소 약 3천만 개)을 k=12로, 라벨이 하나도 바뀌지 않을 때까지 정확 K-means(Hamerly)로 돌렸다. 모든 정지 규칙을 같은 반복열 위에서 판정했다.</p>
+  <figure class="chart"><div class="chart-frame"><img src="figures/fig10_sentinel2_tail.png" alt="Sentinel-2 장면의 수렴 꼬리와 정지 규칙" loading="lazy"></div><figcaption><span class="fig-no">그림 10</span>왼쪽: 반복마다 라벨이 바뀐 화소 비율(장면당 선 하나)과 각 규칙이 멈춘 곳. 오른쪽: 규칙별 시간과 수렴 결과와의 차이(작은 점: 장면, 큰 점: 중앙값).</figcaption></figure>
+  <div class="table-title">정지 규칙별 시간과 오차 (장면 12개)</div>
+  {{T:sentinel2_rules}}
+  <details><summary>장면별 · 미결정 목록 · 60 m 혼합 화소</summary>{{T:sentinel2_scenes}}<div style="height:.75rem"></div>{{T:sentinel2_unstable}}<div style="height:.75rem"></div>{{T:sentinel2_mixing}}</details>
+  <ul class="points prose">
+    <li>수렴까지 105~460회가 걸린다. 원격탐사 기본값(변경 &lt; 2% 또는 10회)은 시간 6~19%에 멈추지만 수렴 결과와 라벨이 다른 화소가 중앙값 23%다. 전체 적합도(SSE)는 0.8~7.8%만 크다.</li>
+    <li>scikit-learn 기본값은 대개 오차 수 % 이내지만, 군집이 250회 무렵까지 재편된 센트럴 밸리에서는 84회에 멈춰 34%가 틀렸다.</li>
+    <li>Markov-K-means는 12개 장면 모두 오차 0.5% 이하에서 멈췄다(시간 중앙값 69%, 감시 비용 제외 60%). 알맞은 반복 수가 장면마다 30회에서 300회 이상까지 달라 고정 설정으로는 같은 결과를 못 낸다.</li>
+    <li>미결정 점은 0.1~0.2%이고 대부분 맞는 점이다. 60 m 혼합 화소를 가려내는 능력은 무작위 수준(AUROC 0.50)이고, 거리 비가 낫다(0.73~0.86).</li>
+  </ul>
+</section>
+
 <section id="next">
   <header><div class="eyebrow">결론</div><h2>가장 쓸모 있었던 것은 "언제 개입할지"의 판단</h2></header>
   <ul class="points prose">

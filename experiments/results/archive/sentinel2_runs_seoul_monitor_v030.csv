@@ -1,0 +1,9 @@
+site,tile,item,cloud_cover,valid_load_s,markov_reason,markov_regime,U_frac,U_precision,U_recall,U_error_keep,U_error_markov,monitor_s,settle_s,n,k,converged,total_iter,total_s,seed_s,assign0_s
+"Seoul (urban, forest, river)",52SCG,"<bound method IndexOpsMixin.item of site                                Seoul (urban, forest, river)
+tile                                                       52SCG
+item                                    S2A_52SCG_20241112_0_L2A
+url            https://sentinel-cogs.s3.us-west-2.amazonaws.c...
+cloud_cover                                             0.161406
+nodata                                                   0.00003
+datetime                             2024-11-12T02:27:11.227000Z
+Name: 0, dtype: object>",0.161406,50.419837198000096,few_unstable,drift,0.0009877121146909364,0.013995470065244583,0.011566830576665176,0.013555998783002603,0.013995470065244583,44.329543174999344,1.5683131140001478,29949010,12,True,156,131.76108126199915,27.908168580000165,5.250718351999922
