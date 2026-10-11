@@ -36,6 +36,13 @@ def _half_nearest(C):
     return D.min(1) / 2
 
 
+def center_errors(C_now, C_pseudo, C_ref):
+    """Distance of each current and pseudo center to the reference centroid, over half the
+    distance from that centroid to its nearest other one (the scale at which a boundary moves)."""
+    scale = _half_nearest(C_ref)
+    return (np.sqrt(((C_now - C_ref) ** 2).sum(1)) / scale, np.sqrt(((C_pseudo - C_ref) ** 2).sum(1)) / scale)
+
+
 def analyse(regime, sep, seed, eta):
     traj, X = trajectory(regime, sep, seed, eta)
     H, C, secs = traj["H"], traj["C"], traj["secs"]
@@ -75,8 +82,9 @@ def analyse(regime, sep, seed, eta):
     inU, in4 = np.zeros(len(L), bool), np.zeros(len(L), bool)
     inU[U], in4[U4] = True, True
     # centers: how far the current and the pseudo centers are from the reference partition's centroids
+    # (mean and largest over centers; most centers of a drifting run have already stopped)
     C_ref = compute_centers(X, ref, C[t])[0]
-    scale = _half_nearest(C_ref)
+    err_now, err_pseudo = center_errors(C[t], Cs, C_ref)
     row.update(
         accepted=bool(accepted), rho_median=float(np.median(rho)), rho_max_share=float((rho >= 0.95 - 1e-12).mean()),
         error_stop=float(w0.mean()), error_03=float(w3.mean()), error_04=float(w4.mean()),
@@ -87,8 +95,8 @@ def analyse(regime, sep, seed, eta):
         cost_03=(secs[t] + st["monitor_seconds"] + settle_s) / full,
         cost_04=(secs[t] + st["monitor_seconds"] + settle_s + pseudo_s) / full,
         pseudo_share=pseudo_s / full, pseudo_dist_share=nd / (len(L) * K),
-        center_err_now=float(np.median(np.sqrt(((C[t] - C_ref) ** 2).sum(1)) / scale)),
-        center_err_pseudo=float(np.median(np.sqrt(((Cs - C_ref) ** 2).sum(1)) / scale)))
+        center_err_now=err_now.max(), center_err_pseudo=err_pseudo.max(),
+        center_err_now_mean=err_now.mean(), center_err_pseudo_mean=err_pseudo.mean())
     if accepted and len(moves):
         # membership of the predicted movers: weight on the new label against how often it is right
         r = np.searchsorted(U4, moves)
@@ -115,7 +123,7 @@ def report(df):
     T["pseudo_default"] = md(t1, {"정지 반복": "{:.0f}", "오류: 멈춘 그대로": "{:.3%}", "오류: 0.3 (이력 정리)": "{:.3%}",
                                   "오류: 0.4 (의사 대표점)": "{:.3%}", "고친 점": "{:,.0f}", "망친 점": "{:,.0f}",
                                   "시간: 0.3": "{:.1%}", "시간: 0.4": "{:.1%}"}, index_name="사례")
-    t2 = d[["accepted", "rho_median", "center_err_now", "center_err_pseudo", "U_frac", "undecided_frac", "recall_03",
+    t2 = d[["accepted", "rho_median", "center_err_now_mean", "center_err_pseudo_mean", "U_frac", "undecided_frac", "recall_03",
             "recall_04", "moves_right"]].copy()
     t2["accepted"] = t2.accepted.map({True: "예", False: "아니오"})
     t2.columns = ["채택", "ρ 중앙값", "대표점 오차: 현재", "대표점 오차: 의사", "미결정: 0.3", "미결정: 0.4",
