@@ -39,6 +39,19 @@ that remain undecided.
 * `representatives="current"` reproduces 0.3.1 exactly (checked bit for bit on 108
   configurations of algorithm, stop, settlement rule and center update).
 
+### Evaluation
+* Sentinel-2 (docs/results.md, section 9): on the twelve scenes of thirty million pixels,
+  at the same stop as 0.3, the labels differing from the converged map fell in every scene
+  (median 0.20 % to 0.07 %, worst 0.49 % to 0.35 %), for 0.4 to 1.2 % of the full run's time.
+  The pseudo labelling was kept in all twelve scenes, and almost all the pixels it moved
+  ended where the converged run puts them.
+* Synthetic trajectories (section 10): the error at the automatic stop fell in all ten
+  cases (exact Lloyd 6 to 22 %, 1/count mini-batch 14 to 17 %, constant step 3 to 15 %),
+  for at most 1.6 % of the full run's time. Under a constant step the pseudo
+  representatives halve the distance of the centers to the reference centers.
+* `rho_max = 0.95` is best or tied on exact Lloyd; higher caps overshoot or are rejected by
+  the safeguard.
+
 ## 0.3.1
 
 ### Changed

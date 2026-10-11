@@ -14,6 +14,7 @@ from matplotlib.patches import FancyBboxPatch, Polygon, Rectangle
 from experiments.analyze_markov_tail import FIG, GRID, INK, INK2, SERIES, SURFACE, plt
 from experiments.auto_rule import reference, replay_stop
 from experiments.pareto import K, RESULTS, first_t, settle_labels, trajectory
+from experiments.time_for_error import _Brute, finish_04
 from kmeans_accel import datasets
 from markov_kmeans import _rules
 
@@ -207,8 +208,10 @@ def tail_data():
         t_sk = first_t(lambda t_: shift[t_] <= 1e-4 * var, T)
         for t in range(1, T):
             settled, _ = settle_labels(H, t, None, "auto")
+            finished, _, _ = finish_04(X, _Brute(X, C[t]), H, C, t, None, "auto")   # same labels as Hamerly's pass
             rows.append(dict(regime=regime, t=t, changing=counts[t - 1] / n, keep=float((H[t] != ref).mean()),
-                             settle=float((settled != ref).mean()), t_auto=t_auto, t_sklearn=t_sk, n_iter=T))
+                             settle=float((settled != ref).mean()), pseudo=float((finished != ref).mean()),
+                             t_auto=t_auto, t_sklearn=t_sk, n_iter=T))
     df = pd.DataFrame(rows)
     df.to_csv(RESULTS / "readme_tail.csv", index=False)
     return df
@@ -221,7 +224,10 @@ def tail_figure(df):
         pct = lambda s: s.where(s > 0) * 100
         ax.plot(d.t, pct(d.changing), color=INK2, lw=1.4, label="points changing cluster in this iteration")
         ax.plot(d.t, pct(d.keep), color=ORANGE, lw=2.0, label="wrong labels if stopped here")
-        ax.plot(d.t, pct(d.settle), color=BLUE, lw=2.0, ls="--", label="wrong labels if stopped here and settled")
+        ax.plot(d.t, pct(d.settle), color=SERIES[2], lw=1.8, ls="--",
+                label="... and settled from label histories only (0.3)")
+        if "pseudo" in d:
+            ax.plot(d.t, pct(d.pseudo), color=BLUE, lw=2.2, label="... and finished by Markov-K-means (0.4)")
         t_auto, t_sk, T = int(d.t_auto.iloc[0]), int(d.t_sklearn.iloc[0]), int(d.n_iter.iloc[0])
         ax.axvline(t_auto, color=BLUE, lw=1.6)
         ax.text(t_auto, 1.02, " Markov-K-means stops", transform=ax.get_xaxis_transform(), color=BLUE, fontsize=9.5,
@@ -246,9 +252,9 @@ def tail_figure(df):
             ax.spines[s].set_color(GRID)
         ax.tick_params(colors=INK2, labelsize=9)
     h, l = axes[0].get_legend_handles_labels()
-    fig.legend(h, l, loc="lower center", ncol=3, frameon=False, fontsize=10, labelcolor=INK2)
+    fig.legend(h, l, loc="lower center", ncol=2, frameon=False, fontsize=10, labelcolor=INK2)
     fig.patch.set_facecolor(SURFACE)
-    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
     fig.savefig(FIG / "readme_tail.png", dpi=160)
     plt.close(fig)
 

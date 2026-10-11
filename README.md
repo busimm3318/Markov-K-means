@@ -58,9 +58,9 @@ When the monitor diagnoses an oscillation, every point that changed in the windo
 
 ![Changing points and wrong labels along a run: a long tail and a plateau](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/readme_tail.png)
 
-**Exact Lloyd (left).** After the early iterations only a tiny share of points still change cluster, yet the run goes on for many more passes over the data. That tail is what Markov-K-means cuts. Under drift, settling gives the same labels as stopping and keeping them (the two lines overlap), so the whole gain is the time saved.
+**Exact Lloyd (left).** After the early iterations only a tiny share of points still change cluster, yet the run goes on for many more passes over the data. That tail is what Markov-K-means cuts. Most labels that are still wrong at a stop belong to points that have not started to move, so their label histories say nothing: settling from the histories alone (green) gives the same labels as stopping and keeping them. The pseudo representatives (blue) see where the centers are heading and move part of those points in advance, so the blue line runs below the others at every stop.
 
-**Constant step (right).** After a quick drop, the number of changing points stops falling. The run sits on a plateau, and the share of wrong labels barely moves however long it runs. Once on the plateau, settling the switching points from their history (dashed) leaves fewer wrong labels than keeping the current ones, and the gap widens as the run goes on. The automatic rule stops as soon as the plateau is reached. A later fixed stop (`t0`) with settlement buys a lower error for more time.
+**Constant step (right).** After a quick drop, the number of changing points stops falling. The run sits on a plateau, and the share of wrong labels barely moves however long it runs. Once on the plateau, settling the switching points from their history leaves fewer wrong labels than keeping the current ones, and the gap widens as the run goes on. Averaging the jittering centers adds a little more. The automatic rule stops as soon as the plateau is reached. A later fixed stop (`t0`) with settlement buys a lower error for more time.
 
 ### Time versus error, compared with other stopping rules
 
@@ -70,14 +70,14 @@ Each line is one stopping rule with its own setting swept. Every setting is appl
 
 | | constant step / EMA | 1/count mini-batch | exact Lloyd / Hamerly |
 |---|---|---|---|
-| **Markov-K-means, automatic** | **fastest at every error level it reaches** | among the fastest for precise answers; slower for rough ones, because it first watches a full window | on the shared curve, slightly behind a tuned threshold |
-| **Markov-K-means, fixed stop + settle** | **the only rule that goes below the full run's error** | on the shared curve | slightly above the shared curve |
+| **Markov-K-means, automatic** | **fastest at every error level it reaches** | **fastest for precise answers**; slower for rough ones, because it first watches a full window | on the shared curve, slightly behind a tuned threshold |
+| **Markov-K-means, fixed stop** | **the only rule that goes below the full run's error** | **goes below the full run's error** | slightly above the shared curve |
 | scikit-learn `tol` | never stops at its default | on the shared curve | on the shared curve; slightly ahead when tuned |
 | Pérez-Ortega threshold | stops too early or too late | on the shared curve | on the shared curve; slightly ahead when tuned |
 | fixed iterations | stops at an arbitrary moment of the oscillation | on the shared curve | on the shared curve |
 | where the defaults land | Markov-K-means: low error; scikit-learn: runs to the end; Pérez-Ortega: fast but rough | all at low error and little time | Markov-K-means and scikit-learn: low error; Pérez-Ortega and fixed iterations: fast but rough |
 
-In short, each unit of error costs Markov-K-means the least time when training oscillates. With 1/count mini-batch it costs about the same as the other rules, and on exact Lloyd slightly more than a threshold tuned for the data.
+In short, each unit of error costs Markov-K-means the least time when training oscillates, and with 1/count mini-batch when a precise answer is needed. On exact Lloyd it costs slightly more than a threshold tuned for the data. The pseudo representatives lower the error at each stop on exact Lloyd too, but there the error jumps between stops are larger than the gain, so the curve barely moves.
 
 ### On real satellite images
 
@@ -89,9 +89,10 @@ Twelve Sentinel-2 scenes from very different landscapes, each with about thirty 
 |---|---|---|
 | remote-sensing default: fewer than 2 % of pixels changed, or 10 iterations | very early | a large share of pixels labelled differently, though the aggregate fit is close |
 | scikit-learn tolerance | about a third of the way | usually close, but far off when clusters reorganise late |
-| Markov-K-means | later, at a point that differs from scene to scene | close to the converged map in every scene |
+| Markov-K-means, label histories only (0.3) | later, at a point that differs from scene to scene | close to the converged map in every scene |
+| Markov-K-means (0.4) | the same stop | closer still in every scene: about two thirds of the remaining difference is gone, for almost no extra time |
 
-The tail is real on satellite images, and the right number of iterations varies so much between scenes that no fixed setting reaches the converged map everywhere. Markov-K-means is the only rule that gets there in every scene without tuning. The time it saves is moderate, because late iterations on low-dimensional imagery are already cheap. Its undecided list and soft memberships carry little information here: the scenes settle by drift, and a simple distance ratio flags mixed pixels better.
+The tail is real on satellite images, and the right number of iterations varies so much between scenes that no fixed setting reaches the converged map everywhere. Markov-K-means is the only rule that gets there in every scene without tuning. Almost every pixel still wrong at its stop had not started to move, which is exactly what the pseudo representatives are for: nearly all the pixels they move end where the converged run puts them. The time saved is moderate, because late iterations on low-dimensional imagery are already cheap. The undecided list and soft memberships carry little information here: the scenes settle by drift, and a simple distance ratio flags mixed pixels better.
 
 ### Where it applies
 
@@ -141,7 +142,8 @@ r.labels, r.dense(n_clusters), r.uncertainty
 
 ### Limits
 
-- The rule only sees what has happened so far. A point that looks settled at the stop but would move later is not caught, and most of the error left after a drift comes from such points. In the left panel above, wrong labels far outnumber changing points. A smaller `unstable_tol` stops later and leaves fewer of them.
+- Most of the error left after a drift comes from points that look settled at the stop but would move later. The pseudo representatives catch those on the path of a moving center; points the centers would reach only much later remain. A smaller `unstable_tol` stops later and leaves fewer of them.
+- The extrapolation of a center is capped (`rho_max`). A cap set higher overshoots on exact Lloyd, so a center still far from its final position is extrapolated only part of the way.
 - New points get the nearest center from `predict`, since they have no history.
 
 ### Main parameters
@@ -207,9 +209,9 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 
 ![실행 중 바뀌는 점과 틀린 라벨: 긴 꼬리와 평탄 구간](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/readme_tail.png)
 
-**exact Lloyd (왼쪽).** 초반 반복이 지나면 군집을 바꾸는 점은 아주 적은데, 실행은 그 뒤로도 데이터를 여러 번 더 훑는다. Markov-K-means가 끊는 것이 이 꼬리다. 표류 체제에서는 정리 결과가 멈춘 시점의 라벨을 그대로 두는 것과 같다(두 선이 겹친다). 이득은 전부 줄어든 시간에서 나온다.
+**exact Lloyd (왼쪽).** 초반 반복이 지나면 군집을 바꾸는 점은 아주 적은데, 실행은 그 뒤로도 데이터를 여러 번 더 훑는다. Markov-K-means가 끊는 것이 이 꼬리다. 멈춘 시점에 아직 틀린 라벨은 대부분 움직이기 시작하지도 않은 점의 것이라, 라벨 이력은 아무것도 말해 주지 않는다. 이력만으로 정리하면(초록) 멈춘 시점의 라벨을 그대로 두는 것과 같다. 의사 대표점(파랑)은 대표점이 향하는 곳을 보고 그런 점의 일부를 미리 옮기므로, 어느 정지 시점에서든 파란 선이 다른 선보다 아래에 있다.
 
-**고정 학습률 (오른쪽).** 초반에 빠르게 줄어든 뒤로는 바뀌는 점의 수가 더 줄지 않는다. 실행은 평탄 구간에 머물고, 틀린 라벨의 비율은 아무리 오래 돌려도 거의 그대로다. 평탄 구간에서는 오가는 점을 이력으로 정리하면(점선) 현재 라벨을 그대로 둘 때보다 틀린 라벨이 적고, 그 차이는 실행이 길어질수록 벌어진다. 자동 규칙은 평탄 구간에 들어서자마자 멈춘다. 더 늦은 고정 시점(`t0`)에서 멈추고 정리하면 시간을 더 쓰는 대신 오차가 더 낮아진다.
+**고정 학습률 (오른쪽).** 초반에 빠르게 줄어든 뒤로는 바뀌는 점의 수가 더 줄지 않는다. 실행은 평탄 구간에 머물고, 틀린 라벨의 비율은 아무리 오래 돌려도 거의 그대로다. 평탄 구간에서는 오가는 점을 이력으로 정리하면 현재 라벨을 그대로 둘 때보다 틀린 라벨이 적고, 그 차이는 실행이 길어질수록 벌어진다. 흔들리는 대표점을 평균하면 조금 더 줄어든다. 자동 규칙은 평탄 구간에 들어서자마자 멈춘다. 더 늦은 고정 시점(`t0`)에서 멈추고 정리하면 시간을 더 쓰는 대신 오차가 더 낮아진다.
 
 ### 다른 정지 규칙과 비교한 시간–오차 교환
 
@@ -219,14 +221,14 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 
 | | 고정 학습률 / EMA | 1/count mini-batch | exact Lloyd / Hamerly |
 |---|---|---|---|
-| **Markov-K-means 자동 규칙** | **닿는 모든 오차 수준에서 가장 빠름** | 정밀한 답에서 가장 빠른 축. 먼저 관찰 창 동안 지켜봐야 해서 대략적인 답에서는 느림 | 공통 곡선 위, 조정된 임계값보다 조금 뒤 |
-| **Markov-K-means 고정 정지 + 정리** | **끝까지 돌린 결과보다 낮은 오차에 닿는 유일한 규칙** | 공통 곡선 위 | 공통 곡선보다 조금 위 |
+| **Markov-K-means 자동 규칙** | **닿는 모든 오차 수준에서 가장 빠름** | **정밀한 답에서 가장 빠름**. 먼저 관찰 창 동안 지켜봐야 해서 대략적인 답에서는 느림 | 공통 곡선 위, 조정된 임계값보다 조금 뒤 |
+| **Markov-K-means 고정 정지** | **끝까지 돌린 결과보다 낮은 오차에 닿는 유일한 규칙** | **끝까지 돌린 결과보다 낮은 오차에 닿음** | 공통 곡선보다 조금 위 |
 | scikit-learn `tol` | 기본값에서 끝내 멈추지 못함 | 공통 곡선 위 | 공통 곡선 위, 조정하면 조금 앞섬 |
 | Pérez-Ortega 임계값 | 너무 이르거나 너무 늦게 멈춤 | 공통 곡선 위 | 공통 곡선 위, 조정하면 조금 앞섬 |
 | 고정 반복 수 | 진동 중 아무 순간에나 멈춤 | 공통 곡선 위 | 공통 곡선 위 |
 | 기본값의 위치 | Markov-K-means: 낮은 오차. scikit-learn: 끝까지 돎. Pérez-Ortega: 빠르지만 거침 | 모두 낮은 오차, 적은 시간 | Markov-K-means와 scikit-learn: 낮은 오차. Pérez-Ortega와 고정 반복: 빠르지만 거침 |
 
-정리하면, 오차 한 단위를 줄이는 데 드는 시간은 진동하는 학습에서 Markov-K-means가 가장 적다. 1/count mini-batch에서는 다른 규칙과 비슷하고, exact Lloyd에서 데이터에 맞춰 조정한 임계값과 비교하면 조금 더 든다.
+정리하면, 오차 한 단위를 줄이는 데 드는 시간은 진동하는 학습에서, 그리고 1/count mini-batch에서 정밀한 답이 필요할 때 Markov-K-means가 가장 적다. exact Lloyd에서는 데이터에 맞춰 조정한 임계값보다 조금 더 든다. 의사 대표점은 exact Lloyd에서도 정지 시점마다 오차를 줄이지만, 정지 시점 사이의 오차 차이가 그보다 커서 곡선은 거의 그대로다.
 
 ### 실제 위성영상에서
 
@@ -238,9 +240,10 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 |---|---|---|
 | 원격탐사 기본값: 라벨이 바뀐 화소 2% 미만 또는 10회 | 매우 이른 시점 | 다른 라벨을 받은 화소가 많다. 전체 적합도는 비슷하다 |
 | scikit-learn tol | 대략 3분의 1 지점 | 대개 가깝지만, 군집이 늦게 재편되는 장면에서는 크게 틀린다 |
-| Markov-K-means | 더 늦게, 장면마다 다른 시점 | 모든 장면에서 수렴한 지도에 가깝다 |
+| Markov-K-means, 라벨 이력 정리만 (0.3) | 더 늦게, 장면마다 다른 시점 | 모든 장면에서 수렴한 지도에 가깝다 |
+| Markov-K-means (0.4) | 같은 시점 | 모든 장면에서 더 가깝다. 남은 차이의 약 3분의 2가 사라지고, 추가 시간은 거의 없다 |
 
-위성영상에도 꼬리가 분명히 있고, 알맞은 반복 수가 장면마다 크게 달라서 고정된 설정 하나로는 모든 장면에서 수렴 결과에 닿지 못한다. 조정 없이 모든 장면에서 그곳에 닿는 규칙은 Markov-K-means뿐이다. 다만 저차원 영상에서는 늦은 반복이 원래 싸서 절약되는 시간은 크지 않다. 미결정 목록과 soft 소속도는 여기서 정보가 거의 없다. 장면들이 표류 후 정착하는 체제여서, 혼합 화소는 단순한 거리 비가 더 잘 가려낸다.
+위성영상에도 꼬리가 분명히 있고, 알맞은 반복 수가 장면마다 크게 달라서 고정된 설정 하나로는 모든 장면에서 수렴 결과에 닿지 못한다. 조정 없이 모든 장면에서 그곳에 닿는 규칙은 Markov-K-means뿐이다. 멈춘 시점에 아직 틀린 화소는 거의 모두 움직이기 시작하지도 않은 화소였고, 의사 대표점이 바로 그런 화소를 위한 것이다. 의사 대표점이 옮긴 화소는 거의 모두 수렴한 실행이 두는 곳으로 갔다. 저차원 영상에서는 늦은 반복이 원래 싸서 절약되는 시간은 크지 않다. 미결정 목록과 soft 소속도는 여기서 정보가 거의 없다. 장면들이 표류 후 정착하는 체제여서, 혼합 화소는 단순한 거리 비가 더 잘 가려낸다.
 
 ### 적용 가능한 알고리즘
 
@@ -290,7 +293,8 @@ r.labels, r.dense(n_clusters), r.uncertainty
 
 ### 한계
 
-- 판단은 지금까지 관찰한 것만으로 내린다. 멈출 때 자리 잡은 듯 보였다가 나중에 옮겨 갈 점은 잡지 못하고, 표류 뒤 남는 오차는 대부분 이런 점에서 나온다. 위 왼쪽 그림에서 틀린 라벨이 바뀌는 점보다 훨씬 많은 이유다. `unstable_tol`을 낮추면 더 늦게 멈추는 대신 이런 점이 줄어든다.
+- 표류 뒤 남는 오차는 대부분 멈출 때 자리 잡은 듯 보였다가 나중에 옮겨 갈 점에서 나온다. 의사 대표점은 움직이는 대표점의 경로 위에 있는 점을 잡지만, 대표점이 한참 뒤에야 닿을 점은 남는다. `unstable_tol`을 낮추면 더 늦게 멈추는 대신 이런 점이 줄어든다.
+- 대표점의 외삽에는 상한(`rho_max`)이 있다. 상한을 높이면 exact Lloyd에서 지나치게 외삽하므로, 최종 위치에서 아직 먼 대표점은 일부만 외삽된다.
 - 새 점은 이력이 없으므로 `predict`가 가장 가까운 대표점을 준다.
 
 ### 주요 매개변수

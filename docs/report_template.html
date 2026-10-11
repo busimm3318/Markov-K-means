@@ -374,12 +374,27 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
   <figure class="chart"><div class="chart-frame"><img src="figures/fig10_sentinel2_tail.png" alt="Sentinel-2 장면의 수렴 꼬리와 정지 규칙" loading="lazy"></div><figcaption><span class="fig-no">그림 10</span>왼쪽: 반복마다 라벨이 바뀐 화소 비율(장면당 선 하나)과 각 규칙이 멈춘 곳. 오른쪽: 규칙별 시간과 수렴 결과와의 차이(작은 점: 장면, 큰 점: 중앙값).</figcaption></figure>
   <div class="table-title">정지 규칙별 시간과 오차 (장면 12개)</div>
   {{T:sentinel2_rules}}
-  <details><summary>장면별 · 미결정 목록 · 60 m 혼합 화소</summary>{{T:sentinel2_scenes}}<div style="height:.75rem"></div>{{T:sentinel2_unstable}}<div style="height:.75rem"></div>{{T:sentinel2_mixing}}</details>
+  <details><summary>장면별 · 0.3과 0.4 · 미결정 목록 · 60 m 혼합 화소</summary>{{T:sentinel2_scenes}}<div style="height:.75rem"></div>{{T:sentinel2_pseudo}}<div style="height:.75rem"></div>{{T:sentinel2_unstable}}<div style="height:.75rem"></div>{{T:sentinel2_mixing}}</details>
   <ul class="points prose">
     <li>수렴까지 105~460회가 걸린다. 원격탐사 기본값(변경 &lt; 2% 또는 10회)은 시간 6~19%에 멈추지만 수렴 결과와 라벨이 다른 화소가 중앙값 23%다. 전체 적합도(SSE)는 0.8~7.8%만 크다.</li>
     <li>scikit-learn 기본값은 대개 오차 수 % 이내지만, 군집이 250회 무렵까지 재편된 센트럴 밸리에서는 84회에 멈춰 34%가 틀렸다.</li>
-    <li>Markov-K-means는 12개 장면 모두 오차 0.5% 이하에서 멈췄다(시간 중앙값 69%, 감시 비용 제외 60%). 알맞은 반복 수가 장면마다 30회에서 300회 이상까지 달라 고정 설정으로는 같은 결과를 못 낸다.</li>
+    <li>Markov-K-means는 12개 장면 모두 오차 0.5% 이하에서 멈췄다(0.3: 중앙값 0.20%, 시간 70%). 0.4는 같은 정지에서 의사 대표점으로 재배정해 중앙값 0.07%(최대 0.35%)에 추가 시간 0.6%다. 알맞은 반복 수가 장면마다 30회에서 300회 이상까지 달라 고정 설정으로는 같은 결과를 못 낸다.</li>
     <li>미결정 점은 0.1~0.2%이고 대부분 맞는 점이다. 60 m 혼합 화소를 가려내는 능력은 무작위 수준(AUROC 0.50)이고, 거리 비가 낫다(0.73~0.86).</li>
+  </ul>
+</section>
+
+<section id="pseudo">
+  <header><div class="eyebrow">Markov-K-means 0.4 · 의사 대표점</div><h2>대표점의 경로가 아직 움직이지 않은 점을 미리 옮긴다</h2></header>
+  <p class="prose">남은 오차의 대부분은 정지 시점에 아직 움직이지 않은 점에서 나온다. 라벨 이력은 이런 점을 볼 수 없지만 대표점의 경로는 볼 수 있다. 0.4는 대표점마다 최근 경로를 AR(1) 연쇄로 맞추고, 그 장기 평균(의사 대표점)에 모든 점을 다시 배정한다. 표류하는 대표점은 수렴점으로 외삽되고, 흔들리는 대표점은 평균된다. 새 라벨은 SSE가 늘지 않을 때만 채택하고, 미결정 점의 소속도는 여전히 라벨 이력에서 온다.</p>
+  <figure class="chart"><div class="chart-frame"><img src="figures/readme_pseudo.png" alt="의사 대표점: 표류는 외삽, 진동은 평균" loading="lazy"></div><figcaption><span class="fig-no">그림 11</span>왼쪽: 수렴 중인 대표점의 경로를 외삽한 의사 대표점과, 그 경계로 미리 옮겨지는 점. 오른쪽: 흔들리는 대표점의 평균.</figcaption></figure>
+  <div class="table-title">같은 정지 시점에서 0.3과 0.4 (합성 데이터 10개 사례)</div>
+  {{T:pseudo_default}}
+  <details><summary>대표점 오차 · 미결정 목록 · 소속도 · rho_max 민감도</summary>{{T:pseudo_detail}}<div style="height:.75rem"></div>{{T:pseudo_membership}}<div style="height:.75rem"></div>{{T:pseudo_rho}}</details>
+  <ul class="points prose">
+    <li>같은 정지 시점에서 오차가 합성 데이터 10개 사례 모두에서 3~22%, Sentinel-2 12개 장면 모두에서 29~92% 줄었다. 추가 비용은 끝까지 돌린 시간의 0~1.6%다. 정확 Lloyd에서는 실행 중의 Hamerly 경계로 재배정을 가지치기해 n·k 거리의 4~10%만 계산한다.</li>
+    <li>Sentinel-2에서 의사 대표점이 옮긴 화소는 대부분 96% 이상 맞았다. 합성 정확 Lloyd에서는 67~70%로, 군집이 크게 겹친 데이터에서는 이득이 작다.</li>
+    <li>상수 스텝에서는 흔들리는 대표점의 평균이 현재 위치보다 기준에 가까워(평균 오차 약 절반), mini-batch의 최종 대표점으로 쓴다.</li>
+    <li>외삽 상한 rho_max는 0.95가 정확 Lloyd에서 가장 좋거나 같다. 더 높이면 지나친 외삽으로 오히려 나빠지거나 안전장치가 거부한다.</li>
   </ul>
 </section>
 
@@ -392,7 +407,7 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
     <li><b>권장 사용처:</b> 라벨이 산출물이고 데이터가 매우 큰 K-means의 정지 규칙과 불확실성 표시, 상수 학습률·스트리밍 K-means의 진동 진단. 재구성 오차가 목표인 양자화에는 표본 학습이나 거리 기반 soft 배정이 낫다.</li>
   </ul>
   <div class="grid2">
-    <div class="pattern"><div class="name">U 밖 위험 점 탐지</div><div class="note">Hamerly 상·하한의 여유나 마진으로, 아직 안 움직였지만 곧 움직일 점을 찾는다. 남은 오차의 90%가 여기서 나온다.</div></div>
+    <div class="pattern"><div class="name">더 나은 외삽</div><div class="note">0.4의 의사 대표점은 외삽을 ρ ≤ 0.95로 자른다. 아직 수렴점에서 먼 대표점을 상한 없이 안전하게 외삽하는 방법(경로 전체의 감쇠율, Anderson식 혼합)을 시험한다.</div></div>
     <div class="pattern"><div class="name">재구성 목표 정지 규칙</div><div class="note">SSE·PSNR의 감소를 직접 외삽해 멈춘다. 색 양자화처럼 화질이 목표인 일에 맞춘다.</div></div>
     <div class="pattern"><div class="name">비동질 연쇄</div><div class="note">최근 전이에 가중치를 주어 이동의 전조(π≈0.9 구간)를 반영한다.</div></div>
     <div class="pattern"><div class="name">실데이터 T₀ 연구</div><div class="note">공개 대규모 임베딩에서 T₀ 스윕을 반복한다.</div></div>
@@ -400,12 +415,14 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
 </section>
 
 <footer>
-  <div>저장소 <code>busimm3318/Markov-K-means</code> · 패키지 <code>pip install markov-kmeans</code> (0.2.0). 전체 서술과 표는 <code>docs/results.md</code>에 있다. 이 페이지는 <code>python -m experiments.build_report</code>로 다시 만든다.</div>
+  <div>저장소 <code>busimm3318/Markov-K-means</code> · 패키지 <code>pip install markov-kmeans</code> (0.4.0). 전체 서술과 표는 <code>docs/results.md</code>에 있다. 이 페이지는 <code>python -m experiments.build_report</code>로 다시 만든다.</div>
 <pre>./experiments/run_markov_tail.sh all       # T₀ 스윕 (N=1e7, d=128, N=3e7)
 python -m experiments.auto_rule            # 자동 판단 규칙 평가
 ./experiments/run_applications.sh          # 색 양자화, VQ 코드북
 python -m experiments.analyze_markov_tail  # 그림·표
 python -m experiments.analyze_applications
+python -m experiments.sentinel2_tail run   # Sentinel-2 장면 12개
+python -m experiments.pseudo_reps          # 의사 대표점 (0.4)
 python -m experiments.build_report         # 이 HTML</pre>
   <div>한계: T₀ 연구는 합성 GMM 데이터만 사용했다(실데이터는 응용 실험의 사진 100장). 설정당 시드 수가 적다. 기준해는 국소최적해다. 자동 규칙의 임계값은 N=10⁶ 궤적 7개로 보정했다.</div>
 </footer>
