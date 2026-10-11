@@ -6,19 +6,25 @@ point: x = mean share of labels that differ from the reference, y = mean time re
 full run.  Sweeping the setting traces the procedure's curve; a curve further down and left
 reaches the same error in less time.
 
-    markov-kmeans (auto)      unstable_tol = change_tol swept (other thresholds at their defaults)
-    markov-kmeans (t0)        fixed number of iterations, unstable points settled
+    markov-kmeans (auto)      0.3: unstable_tol = change_tol swept (other thresholds at their
+                              defaults), unstable points settled from their label histories
+    markov-kmeans (t0)        0.3: fixed number of iterations, unstable points settled
+    markov-kmeans 0.4 (auto)  the same stops, then pseudo representatives from the center chains
+    markov-kmeans 0.4 (t0)    (the default since 0.4); the extra assignment pass is timed on the
+                              base algorithm's own state (Hamerly bounds for exact runs)
     sklearn tol               tolerance on the squared center shift swept
     Perez-Ortega              threshold on the share of changed labels swept
     fixed iterations          fixed number of iterations, labels kept
 
     python -m experiments.time_for_error          # experiments/results/time_for_error.csv, docs/figures/fig9_time_for_error.png
     python -m experiments.time_for_error --plot   # redraw the figure from the saved CSV
+    python -m experiments.time_for_error --report # redraw the figure and refill the tables
 """
 from __future__ import annotations
 
 import sys
 import time
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -28,13 +34,48 @@ from experiments.auto_rule import reference, replay_stop
 from experiments.pareto import INSTANCES, K, RESULTS, first_t, name_of, settle_labels, trajectory, warm_up
 from kmeans_accel import datasets
 from markov_kmeans import _rules
+from markov_kmeans._engines import HamerlyEngine, _BruteNearest
+from markov_kmeans.estimator import pseudo_finish
 
 ITERS = (2, 3, 5, 7, 10, 13, 16, 20, 25, 30, 40, 50, 60, 70, 80, 100, 120, 140, 160, 180, 200, 230)
 TOLS = tuple(sorted(set(np.geomspace(3e-2, 1e-5, 15)) | {1e-3}, reverse=True))
 SK_TOLS = tuple(np.geomspace(1e-1, 1e-9, 17))
 PEREZ = tuple(sorted(set(np.geomspace(1e-1, 1e-6, 16)) | {0.03}, reverse=True))
-FAMILIES = ["markov-kmeans (auto)", "markov-kmeans (t0)", "sklearn tol", "Perez-Ortega", "fixed iterations"]
-DEFAULTS = {"markov-kmeans (auto)": 1e-3, "sklearn tol": 1e-4, "Perez-Ortega": 0.03, "fixed iterations": 25}
+FAMILIES = ["markov-kmeans 0.4 (auto)", "markov-kmeans 0.4 (t0)", "markov-kmeans (auto)", "markov-kmeans (t0)",
+            "sklearn tol", "Perez-Ortega", "fixed iterations"]
+DEFAULTS = {"markov-kmeans 0.4 (auto)": 1e-3, "markov-kmeans (auto)": 1e-3, "sklearn tol": 1e-4, "Perez-Ortega": 0.03,
+            "fixed iterations": 25}
+
+
+class _Brute(_BruteNearest):
+    def __init__(self, X, C):
+        self.X, self.centers = X, C
+        self.labels = np.full(X.shape[0], -1, dtype=np.int64)
+
+
+def finish_04(X, eng, H, C, t, regime_name, rule):
+    """0.4 labels at t: the history settlement of U, then the pseudo representatives (timed)."""
+    W = _rules.StopParams().window
+    L = H[t].astype(np.int64)
+    lo = max(0, t - W)
+    U = np.flatnonzero((H[lo + 1:t + 1] != H[lo:t]).any(0))
+    if rule == "keep" or t < 2:
+        return L, 0.0, False
+    t0 = time.perf_counter()
+    lab = L.copy()
+    S = np.empty((0, W + 1), dtype=np.int64)
+    P = np.empty((0, W + 1))
+    osc = np.empty(0, dtype=bool)
+    if len(U):
+        Hw = np.ascontiguousarray(H[lo:t + 1][:, U].astype(np.int64))
+        regime = regime_name
+        if regime is None:
+            regime = "oscillation" if (_rules.switches(Hw) >= 2).mean() >= _rules.StopParams().osc_share else "drift"
+        lab_U, S, P, osc = _rules.settle(Hw, L[U], rule=rule, n_clusters=K, regime=regime)
+        lab[U] = lab_U
+    out = pseudo_finish(X, eng, SimpleNamespace(centers_window=lambda: C[lo:t + 1]), L, lab, U, S, P, osc,
+                        inplace=True)
+    return out[0], time.perf_counter() - t0, out[8]
 
 
 def sweep(regime, sep, seed, eta):
@@ -58,19 +99,40 @@ def sweep(regime, sep, seed, eta):
         mon.push(H[t], C[t], int(counts[t - 1]))
         push[t] = push[t - 1] + time.perf_counter() - t0
 
+    jobs = []    # (t, family, param, regime_name, rule, extra seconds)
     for it in ITERS:
         t = min(it, T - 1)
         add("fixed iterations", it, t, 0.0, err(H[t]))
         lab, s = settle_labels(H, t, None, "auto")
         add("markov-kmeans (t0)", it, t, push[t] + s, err(lab))
+        jobs.append((t, "markov-kmeans 0.4 (t0)", it, None, "auto", push[t]))
     for tol in TOLS:
         params = _rules.StopParams(unstable_tol=tol, change_tol=tol)
         t, reason, _, st = replay_stop(traj, params, exact, "auto", K)
         regime_name = None if reason == "max_iter" else ("oscillation" if reason == "oscillation" else "drift")
-        lab, s = settle_labels(H, t, regime_name, "keep" if reason == "converged" else "auto")
+        rule = "keep" if reason == "converged" else "auto"
+        lab, s = settle_labels(H, t, regime_name, rule)
         add("markov-kmeans (auto)", tol, t, st["monitor_seconds"] + s, err(lab))
+        jobs.append((t, "markov-kmeans 0.4 (auto)", tol, regime_name, rule, st["monitor_seconds"]))
     if X is None:
         X, _, _ = datasets.gmm(1_000_000, 16, K, sep=sep, seed=seed)
+    # the pseudo step needs the base algorithm's state at the stop: replay Hamerly (bit-identical
+    # iterates), or assign by brute force as mini-batch would
+    eng = HamerlyEngine(X, C[0]) if exact else None
+    t_eng = 0
+    for t, fam, par, regime_name, rule, extra in sorted(jobs, key=lambda j: j[0]):
+        if exact:
+            while t_eng < t:
+                eng.step()
+                t_eng += 1
+            assert np.array_equal(eng.labels, H[t]) and np.array_equal(eng.centers, C[t])
+        if exact:
+            saved = (eng.labels.copy(), eng.u.copy(), eng.l.copy())    # fit runs the pseudo step in place
+        lab, s, acc = finish_04(X, eng if exact else _Brute(X, C[t]), H, C, t, regime_name, rule)
+        if exact:
+            eng.labels, eng.u, eng.l = saved
+        add(fam, par, t, extra + s, err(lab))
+        rows[-1]["accepted"] = acc
     var = float(np.var(X, axis=0).mean())
     shift = np.r_[np.inf, ((C[1:] - C[:-1]) ** 2).sum((1, 2))]
     for tol in SK_TOLS:
@@ -106,7 +168,8 @@ def time_for(cv, targets=(0.01, 0.005, 0.003, 0.002, 0.001)):
 
 TARGETS = {"exact": (0.02, 0.01, 0.005, 0.002, 0.001), "minibatch": (0.002, 0.001, 0.0005, 0.0002, 0.0001),
            "minibatch_const": (0.01, 0.005, 0.003, 0.002, 0.001)}
-NAMES = {"markov-kmeans (auto)": "markov-kmeans 자동 규칙", "markov-kmeans (t0)": "markov-kmeans t0 지정 + 편입",
+NAMES = {"markov-kmeans 0.4 (auto)": "Markov-K-means 0.4 자동 규칙", "markov-kmeans 0.4 (t0)": "Markov-K-means 0.4 t0 지정",
+         "markov-kmeans (auto)": "0.3 자동 규칙 (이력 정리만)", "markov-kmeans (t0)": "0.3 t0 지정 + 편입",
          "sklearn tol": "sklearn tol", "Perez-Ortega": "Pérez-Ortega", "fixed iterations": "고정 반복 수",
          "full run": "끝까지"}
 
@@ -130,20 +193,23 @@ TITLE = {"exact": "Exact Lloyd / Hamerly\nboundary points drift, then settle",
 
 def figure(cv):
     fig, axes = plt.subplots(1, 3, figsize=(15, 5.6))
-    style = {"markov-kmeans (auto)": (SERIES[0], "o", "-", 2.8), "markov-kmeans (t0)": (SERIES[0], "o", "--", 1.6),
+    style = {"markov-kmeans 0.4 (auto)": (SERIES[0], "o", "-", 2.8), "markov-kmeans 0.4 (t0)": (SERIES[0], "o", "--", 1.6),
+             "markov-kmeans (auto)": (INK2, "P", "-", 1.6),
              "sklearn tol": (SERIES[1], "s", "-", 2.0), "Perez-Ortega": (SERIES[2], "^", "-", 2.0),
              "fixed iterations": (SERIES[3], "D", "-", 2.0)}
-    label = {"markov-kmeans (auto)": "Markov-K-means, automatic", "markov-kmeans (t0)": "Markov-K-means, fixed stop + settle",
+    label = {"markov-kmeans 0.4 (auto)": "Markov-K-means 0.4, automatic",
+             "markov-kmeans 0.4 (t0)": "Markov-K-means 0.4, fixed stop",
+             "markov-kmeans (auto)": "Markov-K-means 0.3, automatic (label histories only)",
              "sklearn tol": "scikit-learn tol", "Perez-Ortega": "Pérez-Ortega threshold", "fixed iterations": "fixed iterations"}
     for ax, reg in zip(axes, ("exact", "minibatch", "minibatch_const")):
         d = cv[cv.regime == reg]
-        for fam in FAMILIES:
+        for fam in style:
             q = d[d.family == fam].sort_values("error")
             col, mk, ls, lw = style[fam]
             # keep only the lower envelope: a setting that costs more for a larger error is never chosen
             env = q[q.cost <= q.cost.cummin()]
             ax.plot(env.error * 100, env.cost, color=col, ls=ls, lw=lw, marker=mk, ms=5.5 if lw < 2 else 6.5,
-                    markeredgecolor=SURFACE, markeredgewidth=1, label=label[fam], zorder=4 if "auto" in fam else 3)
+                    markeredgecolor=SURFACE, markeredgewidth=1, label=label[fam], zorder=4 if "0.4 (auto)" in fam else 3)
             if fam in DEFAULTS:
                 dq = q[np.isclose(q.param, DEFAULTS[fam])]
                 ax.scatter(dq.error * 100, dq.cost, s=190, facecolor="none", edgecolor=col, linewidth=2.2, zorder=5)
@@ -165,7 +231,7 @@ def figure(cv):
     h += [plt.Line2D([], [], ls="none", marker="*", ms=15, color=INK2, markeredgecolor=SURFACE),
           plt.Line2D([], [], ls="none", marker="o", ms=13, markerfacecolor="none", markeredgecolor=INK2, markeredgewidth=2)]
     l += ["full run", "default setting"]
-    fig.legend(h, l, loc="lower center", ncol=4, frameon=False, fontsize=11, labelcolor=INK2)
+    fig.legend(h, l, loc="lower center", ncol=3, frameon=False, fontsize=11, labelcolor=INK2)
     fig.tight_layout(rect=(0, 0.12, 1, 1))
     FIG.mkdir(parents=True, exist_ok=True)
     fig.savefig(FIG / "fig9_time_for_error.png", dpi=150)
@@ -174,8 +240,11 @@ def figure(cv):
 
 def main(argv=()):
     plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
-    if "--plot" in argv:
-        figure(curves(pd.read_csv(RESULTS / "time_for_error.csv")))
+    if "--plot" in argv or "--report" in argv:
+        cv = curves(pd.read_csv(RESULTS / "time_for_error.csv"))
+        figure(cv)
+        if "--report" in argv:
+            fill_report(report_tables(cv))
         return None
     warm_up()
     df = pd.concat([sweep(*inst) for inst in INSTANCES], ignore_index=True)

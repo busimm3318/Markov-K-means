@@ -2,7 +2,9 @@
 
 Each engine exposes ``labels`` (int64, current assignment), ``centers`` (the centers
 those labels were computed against), ``n_dist`` (point-center distance evaluations so
-far) and ``step() -> int`` (one iteration; returns the number of labels that changed).
+far), ``step() -> int`` (one iteration; returns the number of labels that changed) and
+``nearest(C, inplace=False) -> (labels, n_dist)`` (nearest of the centers C for every
+point; ``inplace=True`` reuses the engine's arrays, after which it must not step again).
 """
 from __future__ import annotations
 
@@ -12,7 +14,15 @@ from ._kernels import (_assign, _half_nearest_center, _init, _sculley_update, _u
                        center_drift, compute_centers, nearest_all)
 
 
-class LloydEngine:
+class _BruteNearest:
+    def nearest(self, C, inplace=False):
+        labels = self.labels if inplace else np.empty(self.X.shape[0], dtype=np.int64)
+        labels.fill(-1)
+        nearest_all(self.X, C, labels)
+        return labels, self.X.shape[0] * C.shape[0]
+
+
+class LloydEngine(_BruteNearest):
     """Plain Lloyd: recompute centers, then assign every point (n k distances)."""
 
     exact = True
@@ -57,8 +67,15 @@ class HamerlyEngine:
         self.n_dist += int(nd)
         return int(changed)
 
+    def nearest(self, C, inplace=False):
+        """Nearest of C, pruned by the current bounds moved by |C - centers| (as a step)."""
+        labels, u, l = (self.labels, self.u, self.l) if inplace else (self.labels.copy(), self.u.copy(), self.l.copy())
+        _update_bounds(labels, u, l, center_drift(self.centers, C))
+        _, nd = _assign(self.X, C, labels, u, l, _half_nearest_center(C))
+        return labels, int(nd)
 
-class MiniBatchEngine:
+
+class MiniBatchEngine(_BruteNearest):
     """Sculley (WWW 2010) mini-batch K-means; one step = one epoch over a random permutation.
 
     A point's label for the epoch is the one it receives when its batch is processed, so

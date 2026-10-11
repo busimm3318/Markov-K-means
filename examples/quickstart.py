@@ -1,4 +1,4 @@
-"""Markov-K-means quick start: cluster, inspect the few unstable points, read soft memberships.
+"""Markov-K-means quick start: cluster, inspect the few undecided points, read soft memberships.
 
     python examples/quickstart.py
 """
@@ -19,10 +19,11 @@ print(f"stopped after {mk.n_iter_} iterations ({mk.stop_reason_}, regime {mk.reg
 last = mk.decision_trace_[-1]
 print("  state at the stop: " + ", ".join(f"{k}={last[k]:.3g}" for k in ("unstable_frac", "center_drift")
                                            if isinstance(last.get(k), float)))
-print(f"unstable points settled by Markov chains: {len(mk.unstable_indices_)} "
+print(f"pseudo representatives kept: {mk.pseudo_accepted_}; points they moved: {len(mk.predicted_moves_)}")
+print(f"undecided points settled by Markov chains: {len(mk.unstable_indices_)} "
       f"({mk.unstable_fraction_:.3%} of the data)")
 
-M = mk.membership_                      # sparse (n, k): one-hot outside U, long-run law on U
+M = mk.membership_                      # sparse (n, k): one-hot outside the undecided points
 frac = np.flatnonzero(M.max(1).toarray().ravel() < 1)
 print(f"points with a fractional membership: {len(frac)}")
 for i in frac[:3]:
@@ -42,7 +43,7 @@ print(f"saved vs full run: {1 - mk.n_dist_ / full.n_dist_:.1%} of distance evalu
 osc = MarkovKMeans(n_clusters=50, algorithm="minibatch", learning_rate="constant", eta=1e-3,
                    max_iter=200, random_state=0).fit(X)
 print(f"constant step: stopped at epoch {osc.n_iter_} ({osc.stop_reason_}); "
-      f"{osc.oscillating_share_:.0%} of its {len(osc.unstable_indices_)} unstable points oscillate")
+      f"{osc.oscillating_share_:.0%} of its {len(osc.unstable_indices_)} undecided points oscillate")
 
 # The Markov step on its own works on any label history (rows = iterations, oldest first).
 history = np.array([[0, 0, 0, 0, 0, 1, 1, 1], [0, 1, 0, 1, 0, 1, 0, 1]]).T

@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.4.0
+
+The Markov-K-means algorithm is now one flow: the state monitor stops the run, the
+**Markov chain of each center** gives a pseudo representative, every point is assigned to
+its nearest pseudo representative, and the **Markov chains of the labels** settle the points
+that remain undecided.
+
+### Added
+* **Pseudo representatives** (`representatives="markov"`, the new default). At the stop,
+  the path of each center over the window is fitted as an AR(1) chain
+  c_{s+1} = a + rho c_s; its long-run mean a / (1 - rho) is where a converging center is
+  heading, or the point a jittering center hovers around. Every point is assigned to its
+  nearest pseudo representative (one extra assignment pass, pruned by the Hamerly bounds of
+  the run). This moves the points that are about to cross a boundary, which no label
+  history can see because they have not moved yet.
+  * Safeguard: the pseudo labelling is kept only if its SSE (with its own centroids) is not
+    above that of the history settlement; otherwise the result is exactly the 0.3 result.
+  * The undecided points are now the unstable set plus the predicted movers. A point that
+    oscillates keeps its history law; a predicted mover gets {new: 1 - f/2, old: f/2}, f
+    being how late the boundary crosses it on the way to the pseudo representatives.
+  * New parameters `representatives` (`"markov"` or `"current"`) and `rho_max`; new
+    `center_update="pseudo"` (final centers = pseudo representatives).
+  * New attributes `pseudo_centers_`, `center_rho_`, `pseudo_accepted_`, `predicted_moves_`.
+  * `_rules.long_run_centers`, `_rules.crossing_fraction`, `_rules.undecided` and
+    `StateMonitor.centers_window`.
+
+### Changed
+* `unstable_indices_`, `unstable_states_`, `unstable_probs_`, `oscillating_`,
+  `uncertainty_`, `unstable_fraction_` and `membership_` cover the undecided points (the
+  unstable set plus the predicted movers). The unstable share that stopped the run is in
+  `decision_trace_[-1]["unstable_frac"]`.
+* `center_update="auto"` on mini-batch uses the pseudo representatives when the pseudo
+  labelling was kept (the current centers otherwise, as before).
+* `n_dist_` includes the extra assignment pass: pruned by the run's Hamerly bounds on the
+  default engine (a few percent of n x n_clusters distances), n x n_clusters on Lloyd and
+  mini-batch. The pass reuses the stopped engine's arrays, so it allocates nothing n-sized.
+* `representatives="current"` reproduces 0.3.1 exactly (checked bit for bit on 108
+  configurations of algorithm, stop, settlement rule and center update).
+
+### Evaluation
+* Sentinel-2 (docs/results.md, section 9): on the twelve scenes of thirty million pixels,
+  at the same stop as 0.3, the labels differing from the converged map fell in every scene
+  (median 0.20 % to 0.07 %, worst 0.49 % to 0.35 %), for 0.4 to 1.2 % of the full run's time.
+  The pseudo labelling was kept in all twelve scenes, and almost all the pixels it moved
+  ended where the converged run puts them.
+* Synthetic trajectories (section 10): the error at the automatic stop fell in all ten
+  cases (exact Lloyd 6 to 22 %, 1/count mini-batch 14 to 17 %, constant step 3 to 15 %),
+  for at most 1.6 % of the full run's time. Under a constant step the pseudo
+  representatives halve the distance of the centers to the reference centers.
+* `rho_max = 0.95` is best or tied on exact Lloyd; higher caps overshoot or are rejected by
+  the safeguard.
+
 ## 0.3.1
 
 ### Changed

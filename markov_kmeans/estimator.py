@@ -1,4 +1,4 @@
-"""MarkovKMeans: stop K-means once only a few points still move, settle them by Markov chains."""
+"""MarkovKMeans: stop K-means once only a few points still move, finish it by Markov chains."""
 from __future__ import annotations
 
 import time
@@ -19,6 +19,31 @@ except ImportError:                     # older scikit-learn: the estimator meth
         return estimator._validate_data(X, **kwargs)
 
 _ALGORITHMS = ("hamerly", "lloyd", "minibatch")
+_REPRESENTATIVES = ("markov", "current")
+_CENTER_UPDATES = ("auto", "hard", "soft", "pseudo", "none")
+
+
+def pseudo_finish(X, engine, monitor, L, labels, U, S, P, oscillating, rho_max=0.95, inplace=False):
+    """Center chains -> pseudo representatives -> assignment, kept if it does not raise the SSE.
+
+    ``L`` are the engine's labels at the stop and ``(labels, U, S, P, oscillating)`` the
+    history settlement. Returns ``(labels, U, S, P, oscillating, pseudo_centers, rho, moves,
+    accepted, n_dist)``: when the pseudo labelling is rejected the settlement comes back
+    unchanged, with no moves. ``inplace=True`` lets the engine reuse its own arrays (it is
+    done once the run has stopped), which saves copying them on large data.
+    """
+    C = engine.centers
+    Cs, rho = _rules.long_run_centers(monitor.centers_window(), rho_max)
+    pseudo, n_dist = engine.nearest(Cs, inplace=inplace)
+    moves = np.flatnonzero(pseudo != L)
+    M0, n0 = compute_centers(X, L, C)
+    accepted = (_rules.sse_change(X, L, pseudo, moves, M0, n0)
+                <= _rules.sse_change(X, L, labels, U, M0, n0))
+    if not accepted:
+        return labels, U, S, P, oscillating, Cs, rho, moves[:0], False, n_dist
+    frac = _rules.crossing_fraction(X[moves], L[moves], pseudo[moves], C, Cs)
+    U, S, P, oscillating = _rules.undecided(U, S, P, oscillating, moves, frac, pseudo, L)
+    return pseudo, U, S, P, oscillating, Cs, rho, moves, True, n_dist
 
 
 class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMixin, BaseEstimator):
@@ -41,21 +66,38 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
     * partitions — no cluster may still be reorganising: its size is steady over the window
       and either few of its members move or their moves between clusters balance out.
 
-    The Markov step intervenes (the run stops and U is settled from its label histories)
-    when only a few vectors move and centers and partitions are stable, and either the
-    oscillation has reached a plateau (``stop_reason_="oscillation"``) or the projected
-    remaining changes are negligible (``"stable_drift"``); it also stops on convergence
-    (``"converged"``), when U is at most ``unstable_tol`` of the data (``"few_unstable"``),
-    at ``t0`` or at ``max_iter``.  ``decision_trace_`` records every judgement.
+    The Markov step intervenes (the run stops) when only a few vectors move and centers and
+    partitions are stable, and either the oscillation has reached a plateau
+    (``stop_reason_="oscillation"``) or the projected remaining changes are negligible
+    (``"stable_drift"``); it also stops on convergence (``"converged"``), when U is at most
+    ``unstable_tol`` of the data (``"few_unstable"``), at ``t0`` or at ``max_iter``.
+    ``decision_trace_`` records every judgement.
 
-    The points of U are then settled from their label windows (``assign_rule="auto"``),
-    depending on the diagnosed regime: in an oscillation every point of U gets its window
-    occupancy (hard: most frequent label; soft: the occupancy, e.g. ``[0.5, 0.5]``); in a
-    drift a point that switched at most once (it moved and stayed) keeps its current label
-    and only points that switched twice or more get their occupancy.  ``assign_rule="markov"`` uses the long-run
-    law of each point's Markov chain instead (optionally smoothed by ``alpha`` and shrunk
-    towards pooled moves by ``pooled_prior``); ``"frequency"`` the occupancy for every
-    point; ``"keep"`` the current label.
+    The run is then finished by two kinds of Markov chains (``representatives="markov"``):
+
+    1. Center chains -> pseudo representatives. Each center's path over the window is fitted
+       as an AR(1) chain c_{s+1} = a + rho c_s; its long-run mean is where the center is
+       heading (a drift) or the point it jitters around (an oscillation).
+    2. Every point is assigned to its nearest pseudo representative (one extra assignment
+       pass, pruned by the Hamerly bounds of the run). This moves the points that are about to cross a boundary before the run gets
+       there, which the label histories alone cannot see.
+    3. Label chains -> memberships. The points of U are settled from their label windows as
+       below; the undecided points are U plus the predicted movers (points whose label the
+       pseudo representatives change). An oscillating point keeps its history law, a
+       predicted mover gets {new: 1 - f/2, old: f/2}, f being how late along the path to the
+       pseudo representatives the boundary crosses it.
+    4. Safeguard: the pseudo labelling is kept only if its SSE (with its own centroids) is
+       not above that of the history settlement; otherwise the result is the history
+       settlement alone (``pseudo_accepted_=False``), as with ``representatives="current"``.
+
+    History settlement (``assign_rule="auto"``) depends on the diagnosed regime: in an
+    oscillation every point of U gets its window occupancy (hard: most frequent label; soft:
+    the occupancy, e.g. ``[0.5, 0.5]``); in a drift a point that switched at most once (it
+    moved and stayed) keeps its current label and only points that switched twice or more
+    get their occupancy.  ``assign_rule="markov"`` uses the long-run law of each point's
+    Markov chain instead (optionally smoothed by ``alpha`` and shrunk towards pooled moves by
+    ``pooled_prior``); ``"frequency"`` the occupancy for every point; ``"keep"`` the current
+    label.
 
     Parameters
     ----------
@@ -84,10 +126,18 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
         Markov rule only: Dirichlet smoothing and pooled-prior strength.
     oscillation_rule : {"frequency", "markov"}
         How ``assign_rule="auto"`` settles oscillating points.
-    center_update : {"auto", "hard", "soft", "none"}
+    representatives : {"markov", "current"}
+        "markov" finishes the run from the pseudo representatives (the long-run means of the
+        center chains); "current" settles U against the current centers only (the 0.3
+        behaviour, no extra assignment pass).
+    rho_max : float in [0, 1)
+        Upper clip of each center chain's AR(1) coefficient; bounds how far a drifting
+        center is extrapolated (at most rho_max / (1 - rho_max) mean steps ahead).
+    center_update : {"auto", "hard", "soft", "pseudo", "none"}
         Final centers: centroids of the final labels ("hard"), weighted by the soft
-        memberships ("soft"), or the base algorithm's current centers ("none").
-        "auto" is "hard" for Lloyd/Hamerly and "none" for mini-batch.
+        memberships ("soft"), the pseudo representatives ("pseudo"), or the base
+        algorithm's current centers ("none"). "auto" is "hard" for Lloyd/Hamerly; for
+        mini-batch it is "pseudo" when the pseudo labelling was kept and "none" otherwise.
     batch_size, learning_rate, eta : mini-batch settings (``learning_rate`` is
         ``"count"`` for Sculley's 1/count rule or ``"constant"`` for a fixed ``eta``).
     random_state : int, RandomState instance or None
@@ -97,12 +147,19 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
     labels_ : (n,) final hard labels
     cluster_centers_ : (n_clusters, n_features)
     labels_at_stop_ : (n,) labels of the base algorithm when it stopped
-    unstable_indices_ : indices of U (empty if the base algorithm converged)
-    unstable_states_, unstable_probs_ : (|U|, window+1) visited clusters and settlement
-        probabilities of each point of U (states padded with -1)
-    oscillating_ : (|U|,) bool, points of U that switched at least twice in the window
-    uncertainty_ : (|U|,) 1 - max probability
-    membership_ : scipy.sparse CSR (n, n_clusters); one-hot outside U, soft law on U
+    unstable_indices_ : indices of the undecided points: U (changed cluster within the
+        window) plus the predicted movers; empty if the base algorithm converged
+    unstable_states_, unstable_probs_ : (m, window+1) candidate clusters and probabilities of
+        each undecided point (states padded with -1)
+    oscillating_ : (m,) bool, undecided points that switched at least twice in the window
+    uncertainty_ : (m,) 1 - max probability
+    membership_ : scipy.sparse CSR (n, n_clusters); one-hot outside the undecided points
+    pseudo_centers_ : (n_clusters, n_features) long-run means of the center chains (the
+        current centers if the run converged)
+    center_rho_ : (n_clusters,) fitted AR(1) coefficient of each center chain
+    pseudo_accepted_ : bool, whether the labels come from the pseudo representatives
+    predicted_moves_ : indices of the points the pseudo representatives moved (empty unless
+        ``pseudo_accepted_``)
     stop_reason_ : "converged", "few_unstable", "stable_drift", "oscillation", "t0" or "max_iter"
     regime_ : "converged", "drift" or "oscillation"
     decision_trace_ : list of dicts, the state judged at every iteration (movement,
@@ -116,8 +173,9 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
                  osc_share=0.3, plateau_ratio=0.8, change_tol=1e-3, center_tol=1e-2,
                  center_noise_tol=0.25, travel_ratio=2.0, cluster_tol=0.1, size_tol=0.02, flow_tol=0.1,
                  min_iter=10, max_iter=300, window=10,
-                 alpha=0.0, pooled_prior=0.0, oscillation_rule="frequency", center_update="auto",
-                 batch_size=4096, learning_rate="count", eta=2e-4, random_state=None):
+                 alpha=0.0, pooled_prior=0.0, oscillation_rule="frequency", representatives="markov",
+                 rho_max=0.95, center_update="auto", batch_size=4096, learning_rate="count", eta=2e-4,
+                 random_state=None):
         self.n_clusters = n_clusters
         self.algorithm = algorithm
         self.init = init
@@ -141,6 +199,8 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
         self.window = window
         self.alpha = alpha
         self.pooled_prior = pooled_prior
+        self.representatives = representatives
+        self.rho_max = rho_max
         self.center_update = center_update
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -203,6 +263,12 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
             raise ValueError(f"stop_rule must be one of {_rules.STOP_RULES}")
         if self.assign_rule not in _rules.ASSIGN_RULES:
             raise ValueError(f"assign_rule must be one of {_rules.ASSIGN_RULES}")
+        if self.representatives not in _REPRESENTATIVES:
+            raise ValueError(f"representatives must be one of {_REPRESENTATIVES}")
+        if not 0.0 <= self.rho_max < 1.0:
+            raise ValueError("rho_max must be in [0, 1)")
+        if self.center_update not in _CENTER_UPDATES:
+            raise ValueError(f"center_update must be one of {_CENTER_UPDATES}")
         params = _rules.StopParams(
             window=W, min_iter=self.min_iter, unstable_tol=self.unstable_tol,
             max_unstable=self.max_unstable, osc_share=self.osc_share, plateau_ratio=self.plateau_ratio,
@@ -254,17 +320,27 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
                 n_clusters=k, oscillation_rule=self.oscillation_rule, regime=regime)
             labels[U] = labels_U
 
+        Cs, rho = C.copy(), np.zeros(k)
+        moves = np.empty(0, dtype=np.int64)
+        accepted, n_extra = False, 0
+        if stop_reason != "converged" and monitor.t >= 2 and W >= 2:
+            if self.representatives == "markov":
+                labels, U, S, P, oscillating, Cs, rho, moves, accepted, n_extra = pseudo_finish(
+                    X, engine, monitor, L, labels, U, S, P, oscillating, self.rho_max, inplace=True)
+            else:
+                Cs, rho = _rules.long_run_centers(monitor.centers_window(), self.rho_max)
+
         mode = self.center_update
         if mode == "auto":
-            mode = "none" if self.algorithm == "minibatch" else "hard"
+            mode = "hard" if self.algorithm != "minibatch" else ("pseudo" if accepted else "none")
         if mode == "hard":
             centers = compute_centers(X, labels, C)[0]
         elif mode == "soft":
             centers = soft_centers(X, L, U, S, P, C) if len(U) else compute_centers(X, labels, C)[0]
-        elif mode == "none":
-            centers = C.copy()
+        elif mode == "pseudo":
+            centers = Cs.copy()
         else:
-            raise ValueError("center_update must be 'auto', 'hard', 'soft' or 'none'")
+            centers = C.copy()
 
         self.labels_ = labels
         self.labels_at_stop_ = L
@@ -272,6 +348,10 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
         self.unstable_indices_ = U
         self.unstable_states_ = S
         self.unstable_probs_ = P
+        self.pseudo_centers_ = Cs
+        self.center_rho_ = rho
+        self.pseudo_accepted_ = bool(accepted)
+        self.predicted_moves_ = moves
         self.uncertainty_ = 1.0 - P.max(1) if len(U) else np.empty(0)
         self.n_iter_ = t
         self.stop_reason_ = stop_reason
@@ -283,7 +363,7 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
         self.decision_trace_ = monitor.trace
         self.unstable_fraction_ = len(U) / n
         self.inertia_ = float(inertia(X, centers, labels))
-        self.n_dist_ = int(engine.n_dist)
+        self.n_dist_ = int(engine.n_dist) + n_extra
         self._n = n
         self._membership = None
         self.fit_seconds_ = time.perf_counter() - t_start
@@ -293,7 +373,7 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
 
     @property
     def membership_(self):
-        """Sparse (n, n_clusters) memberships: one-hot outside U, Markov long-run law on U."""
+        """Sparse (n, n_clusters) memberships: one-hot outside the undecided points, soft on them."""
         if self._membership is None:
             from scipy import sparse
 

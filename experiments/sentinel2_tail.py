@@ -13,12 +13,17 @@ differ only in where they stop:
     pct5_10        changed share < 5 % or 10 iterations (common tutorial setting)
     pct2           changed share < 2 %, no iteration cap
     sklearn_tol    squared center shift <= 1e-4 x mean feature variance (scikit-learn default)
-    markov_auto    MarkovKMeans defaults: StateMonitor, then settlement from label histories
+    markov_v03     Markov-K-means 0.3 (representatives="current"): StateMonitor, then
+                   settlement from label histories
+    markov_auto    MarkovKMeans defaults (0.4): the same stop, then pseudo representatives
+                   from the center chains (one Hamerly-pruned assignment pass, timed) and the
+                   history settlement of the undecided pixels
     full           convergence: the reference partition
 
 The 60 m study asks what a fractional membership means on real pixels: the 20 m cube is
 averaged to 60 m, clustered with MarkovKMeans, and each 60 m pixel's undecided status and
-soft membership are compared with the mixture of its nine 20 m sub-pixels.
+soft membership are compared with the mixture of its nine 20 m sub-pixels (for the
+defaults and for representatives="current").
 
     python -m experiments.sentinel2_tail select   # -> experiments/results/sentinel2_scenes.csv
     python -m experiments.sentinel2_tail run      # -> sentinel2_rules.csv, sentinel2_curves.csv, sentinel2_mixing.csv
@@ -148,7 +153,7 @@ def load(url):
 
 # ----------------------------------------------------------------------------- the tail run
 
-RULES = ("envi_2pct_10", "pct5_10", "pct2", "sklearn_tol", "markov_auto", "full")
+RULES = ("envi_2pct_10", "pct5_10", "pct2", "sklearn_tol", "markov_v03", "markov_auto", "full")
 
 
 def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
@@ -157,6 +162,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
     from markov_kmeans import _rules
     from markov_kmeans._engines import HamerlyEngine
     from markov_kmeans._kernels import compute_centers, inertia
+    from markov_kmeans.estimator import pseudo_finish
 
     n = X.shape[0]
     t_init = time.perf_counter()
@@ -216,16 +222,28 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
                 else:
                     U = mon.unstable().astype(np.int64)
                     Hw = mon.window(U)
-                    lab_U, _, _, _ = _rules.settle(Hw, L[U], rule="auto", n_clusters=k, regime=regime)
+                    lab_U, S, P, osc = _rules.settle(Hw, L[U], rule="auto", n_clusters=k, regime=regime)
                     lab = L.copy()
                     lab[U] = lab_U
                 settle_s = time.perf_counter() - t_s
+                saved = (eng.labels.copy(), eng.u.copy(), eng.l.copy())   # fit runs this step in place
+                t_s = time.perf_counter()
+                if regime == "converged":
+                    lab4, U4, moves, accepted, rho = lab, U, U, False, np.zeros(k)
+                else:
+                    lab4, U4, _, _, _, _, rho, moves, accepted, _ = pseudo_finish(X, eng, mon, L, lab, U, S, P, osc,
+                                                                                  inplace=True)
+                pseudo_s = time.perf_counter() - t_s
+                eng.labels, eng.u, eng.l = saved
                 markov = dict(t=t, regime=regime, reason=("few_unstable" if regime == "drift" and
                                                           state.get("unstable_frac", 1) <= mon.params.unstable_tol
                                                           else {"drift": "stable_drift"}.get(regime, regime)),
-                              U=U, settle_s=settle_s, mon_s=mon_s, keep=L.astype(np.uint8))
-                fired["markov_auto"] = (t, cum + mon_s + settle_s)
-                snaps["markov_auto"] = lab.astype(np.uint8)
+                              U=U, U4=U4, moves=moves, accepted=accepted, rho=rho, settle_s=settle_s,
+                              pseudo_s=pseudo_s, mon_s=mon_s, keep=L.astype(np.uint8))
+                fired["markov_v03"] = (t, cum + mon_s + settle_s)
+                snaps["markov_v03"] = lab.astype(np.uint8)
+                fired["markov_auto"] = (t, cum + mon_s + settle_s + pseudo_s)
+                snaps["markov_auto"] = lab4.astype(np.uint8)
                 del mon      # the monitor is not needed past its decision
         if changed == 0:
             break
@@ -248,7 +266,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
     for c in curve:
         c["error"] = float((snaps[c["t"]] != ref).mean()) if c["t"] in snaps else np.nan
     if markov is not None:
-        U, wrong = markov["U"], snaps["markov_auto"] != ref
+        U, wrong = markov["U"], snaps["markov_v03"] != ref
         wrong_keep = markov["keep"] != ref
         inU = np.zeros(n, dtype=bool)
         inU[U] = True
@@ -258,6 +276,18 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
                      U_error_keep=float(wrong_keep[inU].mean()) if len(U) else np.nan,
                      U_error_markov=float(wrong[inU].mean()) if len(U) else np.nan,
                      monitor_s=markov["mon_s"], settle_s=markov["settle_s"])
+        # 0.4: pseudo representatives
+        wrong4 = snaps["markov_auto"] != ref
+        in4 = np.zeros(n, dtype=bool)
+        in4[markov["U4"]] = True
+        mv = markov["moves"]
+        extra.update(pseudo_s=markov["pseudo_s"], pseudo_accepted=bool(markov["accepted"]), moves_frac=len(mv) / n,
+                     moves_right=float((~wrong4[mv]).mean()) if len(mv) else np.nan,
+                     fixed=int((wrong_keep & ~wrong4).sum()), broken=int((~wrong_keep & wrong4).sum()),
+                     undecided_frac=float(in4.mean()),
+                     undecided_recall=float((wrong4 & in4).sum() / max(wrong4.sum(), 1)),
+                     undecided_precision=float(wrong4[in4].mean()) if in4.any() else np.nan,
+                     rho_median=float(np.median(markov["rho"])))
     extra.update(n=n, k=k, converged=bool(curve[-1]["changed"] == 0), total_iter=t, total_s=cum, seed_s=seed_s,
                  assign0_s=assign0_s)
     return pd.DataFrame(rows), pd.DataFrame(curve), extra
@@ -265,7 +295,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
 
 # ----------------------------------------------------------------------------- 60 m mixing study
 
-def mixing(cube, valid, k=K, seed=SEED):
+def mixing(cube, valid, k=K, seed=SEED, representatives="markov"):
     """Undecided 60 m pixels and soft memberships vs the mixture of their 20 m sub-pixels."""
     from sklearn.metrics import roc_auc_score
 
@@ -276,7 +306,7 @@ def mixing(cube, valid, k=K, seed=SEED):
     ok = valid[:3 * m, :3 * m].reshape(m, 3, m, 3).all((1, 3))
     X60 = c.mean((1, 3))[ok].astype(np.float64)
     sub = c.transpose(0, 2, 1, 3, 4)[ok].reshape(-1, cube.shape[2])                       # (9 n60, d), float32
-    mk = MarkovKMeans(k, random_state=seed).fit(X60)
+    mk = MarkovKMeans(k, random_state=seed, representatives=representatives).fit(X60)
     C = mk.cluster_centers_
     # sub-pixel classes under the same centers, in chunks
     lab_sub = np.empty(len(sub), dtype=np.int64)
@@ -297,7 +327,7 @@ def mixing(cube, valid, k=K, seed=SEED):
     inU[mk.unstable_indices_] = True
     unc = np.zeros(len(X60))
     unc[mk.unstable_indices_] = mk.uncertainty_
-    out = dict(n60=len(X60), stop_reason=mk.stop_reason_, regime=mk.regime_, iterations=mk.n_iter_,
+    out = dict(representatives=representatives, n60=len(X60), stop_reason=mk.stop_reason_, regime=mk.regime_, iterations=mk.n_iter_,
                U_frac=float(inU.mean()), mixed_any_frac=float(mixed_any.mean()), mixed_frac=float(mixed.mean()),
                mixed_frac_in_U=float(mixed[inU].mean()) if inU.any() else np.nan,
                mixed_frac_outside_U=float(mixed[~inU].mean()),
@@ -337,28 +367,31 @@ def run(only=None):
         print(f"{s.site}: n={len(X):,} valid={valid.mean():.1%} loaded in {load_s:.0f}s", flush=True)
         rules, curve, extra = tail_run(X)
         del X
-        mix = mixing(cube, valid)
+        mix = [mixing(cube, valid, representatives=r) for r in ("markov", "current")]
         del cube, valid
         for df, f in ((rules, f_rules), (curve, f_curves)):
             df.insert(0, "site", s.site)
             df.to_csv(f, mode="a", header=not os.path.exists(f), index=False)
-        pd.DataFrame([dict(site=s.site, **mix)]).to_csv(f_mix, mode="a", header=not os.path.exists(f_mix), index=False)
+        pd.DataFrame([dict(site=s.site, **m) for m in mix]).to_csv(f_mix, mode="a", header=not os.path.exists(f_mix),
+                                                                   index=False)
         pd.DataFrame([dict(site=s.site, tile=s["tile"], item=s["item"], cloud_cover=s["cloud_cover"], valid_load_s=load_s,
                            **extra)]).to_csv(f_runs, mode="a", header=not os.path.exists(f_runs), index=False)
         print(rules.round(5).to_string(index=False), flush=True)
-        print({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in {**extra, **mix}.items()}, flush=True)
+        for d in (extra, *mix):
+            print({k_: (round(v, 4) if isinstance(v, float) else v) for k_, v in d.items()}, flush=True)
 
 
 # ----------------------------------------------------------------------------- report
 
 RULE_NAMES = {"envi_2pct_10": "changed < 2 % or 10 iterations (ENVI)", "pct5_10": "changed < 5 % or 10 iterations",
-              "pct2": "changed < 2 %", "sklearn_tol": "scikit-learn tol", "markov_auto": "Markov-K-means (auto)",
+              "pct2": "changed < 2 %", "sklearn_tol": "scikit-learn tol",
+              "markov_v03": "Markov-K-means 0.3 (label histories only)", "markov_auto": "Markov-K-means 0.4 (default)",
               "full": "to convergence"}
-RULE_NAMES["markov_nomon"] = "Markov-K-means, stopping point only"
+RULE_NAMES["markov_nomon"] = "Markov-K-means 0.4, stopping point only"
 RULE_KO = {"envi_2pct_10": "변경 < 2 % 또는 10회 (ENVI 기본값)", "pct5_10": "변경 < 5 % 또는 10회",
            "pct2": "변경 < 2 % (상한 없음)", "sklearn_tol": "scikit-learn tol (기본값)",
-           "markov_auto": "Markov-K-means (기본값)", "markov_nomon": "Markov-K-means 정지 시점 (감시 비용 제외)",
-           "full": "끝까지 (기준)"}
+           "markov_v03": "Markov-K-means 0.3 (라벨 이력 정리만)", "markov_auto": "Markov-K-means 0.4 (기본값)",
+           "markov_nomon": "Markov-K-means 0.4 정지 시점 (감시 비용 제외)", "full": "끝까지 (기준)"}
 
 
 def report():
@@ -376,7 +409,9 @@ def report():
     nomon["time_frac"] = nomon.seconds / runs.loc[m.index, "total_s"]
     nomon["rule"] = "markov_nomon"
     rules = pd.concat([rules, nomon.reset_index()], ignore_index=True)
-    mix = pd.read_csv(os.path.join(RESULTS, "sentinel2_mixing.csv")).set_index("site")
+    mix_all = pd.read_csv(os.path.join(RESULTS, "sentinel2_mixing.csv"))
+    mix = mix_all[mix_all.representatives == "markov"].set_index("site")
+    mix03 = mix_all[mix_all.representatives == "current"].set_index("site")
     sites = list(runs.index)
     short = {s_: s_.split(" (")[0] for s_ in sites}
     plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
@@ -405,13 +440,20 @@ def report():
 
     ax = axes[1]
     style = {"envi_2pct_10": (SERIES[1], "s"), "pct5_10": (SERIES[3], "D"), "pct2": (SERIES[4], "v"),
-             "sklearn_tol": (SERIES[2], "^"), "markov_auto": (SERIES[0], "o")}
+             "sklearn_tol": (SERIES[2], "^"), "markov_v03": (INK2, "P"), "markov_auto": (SERIES[0], "o")}
     for rule, (col, mk) in style.items():
         d = rules[rules.rule == rule]
         ax.scatter(d.time_frac, d.error.clip(lower=1e-6) * 100, color=col, marker=mk, s=28, alpha=0.6,
                    edgecolor="none")
         ax.scatter([d.time_frac.median()], [d.error.median() * 100], color=col, marker=mk, s=150,
                    edgecolor=INK, linewidth=1.2, zorder=5, label=RULE_NAMES[rule])
+    # the same stop finished two ways: link each scene's 0.3 and 0.4 results
+    a = rules[rules.rule == "markov_v03"].set_index("site")
+    b = rules[rules.rule == "markov_auto"].set_index("site")
+    for s_ in a.index.intersection(b.index):
+        ax.plot([a.loc[s_, "time_frac"], b.loc[s_, "time_frac"]],
+                [max(a.loc[s_, "error"], 1e-6) * 100, max(b.loc[s_, "error"], 1e-6) * 100],
+                color=GRID, lw=1, zorder=1)
     ax.set_yscale("log")
     _style(ax, "Time and error of each stopping rule", "labels differing from the converged run (%, log)",
            "time / run to convergence (large marker: median over scenes)")
@@ -436,6 +478,8 @@ def report():
                                index_name="장면")
     agg = {}
     for rule in RULES[:-1] + ("markov_nomon", "full"):
+        if rule == "markov_v03" and "markov_v03" not in set(rules.rule):
+            continue
         d = rules[rules.rule == rule]
         agg[RULE_KO[rule]] = {"시간 (중앙값)": d.time_frac.median(),
                               "시간 (범위)": f"{d.time_frac.min():.0%}–{d.time_frac.max():.0%}",
@@ -448,11 +492,25 @@ def report():
     u.index = [short[s_] for s_ in u.index]
     u.columns = ["미결정 비율", "미결정 중 틀린 비율", "틀린 점 중 미결정 비율", "미결정: 유지 오차", "미결정: 정리 오차"]
     T["sentinel2_unstable"] = md(u, "{:.2%}", index_name="장면")
+    if "pseudo_s" in runs:
+        e03 = rules[rules.rule == "markov_v03"].set_index("site").error
+        e04 = rules[rules.rule == "markov_auto"].set_index("site").error
+        p = pd.DataFrame({"오차: 0.3": e03, "오차: 0.4": e04,
+                          "고친 화소": runs.fixed, "망친 화소": runs.broken, "옮긴 화소": runs.moves_frac,
+                          "옮긴 화소 중 맞은 비율": runs.moves_right,
+                          "틀린 화소 중 미결정: 0.3": runs.U_recall, "틀린 화소 중 미결정: 0.4": runs.undecided_recall,
+                          "추가 시간": runs.pseudo_s / runs.total_s, "ρ 중앙값": runs.rho_median}).loc[sites]
+        p.index = [short[s_] for s_ in p.index]
+        T["sentinel2_pseudo"] = md(p, {"오차: 0.3": "{:.3%}", "오차: 0.4": "{:.3%}", "고친 화소": "{:,.0f}",
+                                       "망친 화소": "{:,.0f}", "옮긴 화소": "{:.2%}", "옮긴 화소 중 맞은 비율": "{:.0%}",
+                                       "틀린 화소 중 미결정: 0.3": "{:.1%}", "틀린 화소 중 미결정: 0.4": "{:.1%}",
+                                       "추가 시간": "{:.1%}", "ρ 중앙값": "{:.2f}"}, index_name="장면")
     m = mix.reindex(columns=["U_frac", "mixed_frac_in_U", "mixed_frac_outside_U", "auroc_U", "auroc_uncertainty",
                              "auroc_distance_ratio", "n_fractional"]).copy()
+    m.insert(3, "auroc_U_03", mix03.reindex(m.index).auroc_U if len(mix03) else np.nan)
     m.index = [short[s_] for s_ in m.index]
-    m.columns = ["미결정 비율", "혼합 화소 비율: 미결정", "혼합 화소 비율: 나머지", "AUROC: 미결정 여부", "AUROC: 1 − max π",
-                 "AUROC: 거리 비", "분수형 소속도를 받은 화소 수"]
+    m.columns = ["미결정 비율", "혼합 화소 비율: 미결정", "혼합 화소 비율: 나머지", "AUROC: 미결정 여부 (0.3)",
+                 "AUROC: 미결정 여부 (0.4)", "AUROC: 1 − max π", "AUROC: 거리 비", "분수형 소속도를 받은 화소 수"]
     T["sentinel2_mixing"] = md(m, {c_: ("{:.2f}" if c_.startswith("AUROC") else "{:,.0f}" if c_.startswith("분수형")
                                        else "{:.1%}") for c_ in m.columns},
                                index_name="장면")
