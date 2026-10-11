@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "markov-kmeans"
 dynamic = ["version"]
-description = "Markov-K-means: stop K-means once only a few points still change cluster and settle them with the long-run law of the Markov chain of their label history"
+description = "Markov-K-means: stop K-means once only a few points still change cluster, then finish it by Markov chains of the centers (pseudo representatives) and of the labels"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]

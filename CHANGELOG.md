@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.4.0
+
+The Markov-K-means algorithm is now one flow: the state monitor stops the run, the
+**Markov chain of each center** gives a pseudo representative, every point is assigned to
+its nearest pseudo representative, and the **Markov chains of the labels** settle the points
+that remain undecided.
+
+### Added
+* **Pseudo representatives** (`representatives="markov"`, the new default). At the stop,
+  the path of each center over the window is fitted as an AR(1) chain
+  c_{s+1} = a + rho c_s; its long-run mean a / (1 - rho) is where a converging center is
+  heading, or the point a jittering center hovers around. Every point is assigned to its
+  nearest pseudo representative (one extra assignment pass). This moves the points that
+  are about to cross a boundary, which no label history can see because they have not
+  moved yet.
+  * Safeguard: the pseudo labelling is kept only if its SSE (with its own centroids) is not
+    above that of the history settlement; otherwise the result is exactly the 0.3 result.
+  * The undecided points are now the unstable set plus the predicted movers. A point that
+    oscillates keeps its history law; a predicted mover gets {new: 1 - f/2, old: f/2}, f
+    being how late the boundary crosses it on the way to the pseudo representatives.
+  * New parameters `representatives` (`"markov"` or `"current"`) and `rho_max`; new
+    `center_update="pseudo"` (final centers = pseudo representatives).
+  * New attributes `pseudo_centers_`, `center_rho_`, `pseudo_accepted_`, `predicted_moves_`.
+  * `_rules.long_run_centers`, `_rules.crossing_fraction`, `_rules.undecided` and
+    `StateMonitor.centers_window`.
+
+### Changed
+* `unstable_indices_`, `unstable_states_`, `unstable_probs_`, `oscillating_`,
+  `uncertainty_`, `unstable_fraction_` and `membership_` cover the undecided points (the
+  unstable set plus the predicted movers). The unstable share that stopped the run is in
+  `decision_trace_[-1]["unstable_frac"]`.
+* `center_update="auto"` on mini-batch uses the pseudo representatives when the pseudo
+  labelling was kept (the current centers otherwise, as before).
+* `n_dist_` includes the extra assignment pass (n x n_clusters distances).
+* `representatives="current"` reproduces 0.3.1 exactly (checked bit for bit on 108
+  configurations of algorithm, stop, settlement rule and center update).
+
 ## 0.3.1
 
 ### Changed

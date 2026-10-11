@@ -44,6 +44,14 @@ Decision (``rule="auto"``)
     otherwise            keep iterating
 ``rule="unstable"`` keeps only the converged / unstable_tol tests (the 0.1.0 behaviour).
 
+Pseudo representatives (``long_run_centers``)
+    Each center's path over the window is read as a Markov chain on positions, the AR(1)
+    model c_{s+1} = a + rho c_s (one rho per center, clipped to [0, rho_max]). Its long-run
+    mean a / (1 - rho) is the pseudo representative: the fixed point a converging center is
+    heading for (drift), or the point a jittering center hovers around (oscillation). Every
+    point is then assigned to the nearest pseudo representative, which moves points that
+    are about to cross a boundary before the run gets there.
+
 Settlement (``settle``, ``rule="auto"``) depends on the regime the monitor diagnosed:
 
 * oscillation — the remaining points keep moving between clusters, so every unstable point
@@ -191,6 +199,105 @@ def _recent(last_change, since):
     return out
 
 
+def long_run_centers(Cw, rho_max=0.95):
+    """Long-run mean of each center's AR(1) chain over a window of center positions.
+
+    ``Cw`` has shape (m, k, d), oldest first, m >= 3. Returns (centers, rho): the long-run
+    means a / (1 - rho) of c_{s+1} = a + rho c_s fitted by least squares per center, and
+    the fitted rho in [0, rho_max]. A center converging geometrically to a fixed point is
+    extrapolated to it; a center jittering around a point gets that point (rho near 0).
+    """
+    Cw = np.asarray(Cw, dtype=np.float64)
+    x, y = Cw[:-1], Cw[1:]
+    mx, my = x.mean(0), y.mean(0)
+    num = ((x - mx) * (y - my)).sum((0, 2))
+    den = ((x - mx) ** 2).sum((0, 2))
+    rho = np.where(den > 0, num / np.where(den > 0, den, 1.0), 0.0)
+    rho = np.clip(rho, 0.0, rho_max)
+    return (my - rho[:, None] * mx) / (1.0 - rho)[:, None], rho
+
+
+def crossing_fraction(X, a, b, C0, C1):
+    """Where along the straight path from centers C0 to C1 each point leaves cluster a for b.
+
+    For every row x of ``X`` (nearer to C0[a] than to C0[b], nearer to C1[b] than to C1[a])
+    returns s in [0, 1] with |x - c_a(s)| = |x - c_b(s)|, c(s) = C0 + s (C1 - C0): near 0 when
+    the boundary crosses the point at once, near 1 when it crosses only at the end.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    if len(X) == 0:
+        return np.empty(0)
+    ca0, cb0 = C0[a], C0[b]
+    da, db = C1[a] - ca0, C1[b] - cb0
+    qa = (da * da).sum(1) - (db * db).sum(1)
+    qb = -2.0 * ((X - ca0) * da).sum(1) + 2.0 * ((X - cb0) * db).sum(1)
+    qc = ((X - ca0) ** 2).sum(1) - ((X - cb0) ** 2).sum(1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        root = np.sqrt(np.maximum(qb * qb - 4.0 * qa * qc, 0.0))
+        r1, r2 = (-qb - root) / (2.0 * qa), (-qb + root) / (2.0 * qa)
+        lin = -qc / qb
+        quad = np.where((r1 > 0) & (r1 <= 1), r1, r2)
+        f = np.where(np.abs(qa) < 1e-12 * np.maximum(np.abs(qb), 1e-300), lin, quad)
+    return np.clip(np.nan_to_num(f, nan=0.5), 0.0, 1.0)
+
+
+def sse_change(X, current, new, idx, centers, counts):
+    """SSE(new) - SSE(current), each labelling with its own centroids, in O(|idx| d).
+
+    The labellings may differ only on ``idx``; ``centers`` and ``counts`` are the centroids
+    and sizes of ``current`` (an empty cluster may have any center). Every term is measured
+    from the old centroid of the cluster a point joins or leaves, so nothing cancels at the
+    scale of the whole data: cluster j changes by sum_in |x - m_j|^2 - sum_out |x - m_j|^2
+    - |sum_in (x - m_j) - sum_out (x - m_j)|^2 / n'_j.
+    """
+    idx = np.asarray(idx, dtype=np.int64)
+    a, b = current[idx], new[idx]
+    keep = a != b
+    idx, a, b = idx[keep], a[keep], b[keep]
+    if len(idx) == 0:
+        return 0.0
+    k = centers.shape[0]
+    gain = X[idx] - centers[b]
+    loss = X[idx] - centers[a]
+    delta = np.empty((k, X.shape[1]))
+    for t in range(X.shape[1]):
+        delta[:, t] = (np.bincount(b, weights=gain[:, t], minlength=k)
+                       - np.bincount(a, weights=loss[:, t], minlength=k))
+    n_new = counts + np.bincount(b, minlength=k) - np.bincount(a, minlength=k)
+    shift = np.where(n_new > 0, (delta * delta).sum(1) / np.maximum(n_new, 1), 0.0)
+    return float((gain * gain).sum() - (loss * loss).sum() - shift.sum())
+
+
+def undecided(U, S, P, osc, moves, frac, labels, current):
+    """Memberships of the undecided points: the unstable set U and the predicted movers.
+
+    ``(U, S, P, osc)`` is the history settlement of U (``settle``), ``moves`` the points the
+    pseudo representatives move from ``current`` to ``labels`` and ``frac`` their crossing
+    fractions. A point whose history gave it a split membership keeps it (it oscillates); a
+    predicted mover gets {new label: 1 - f/2, current label: f/2}; any other point of U is
+    one-hot on its label. Returns (indices, states, probs, oscillating), rows sorted by index.
+    """
+    idx = np.union1d(U, moves).astype(np.int64)
+    width = max(S.shape[1], 2)
+    S2 = np.full((len(idx), width), -1, dtype=np.int64)
+    P2 = np.zeros((len(idx), width))
+    S2[:, 0] = labels[idx]
+    P2[:, 0] = 1.0
+    r = np.searchsorted(idx, moves)
+    S2[r, 1] = current[moves]
+    P2[r, 0] = 1.0 - frac / 2.0
+    P2[r, 1] = frac / 2.0
+    split = (P > 0).sum(1) > 1
+    r = np.searchsorted(idx, U[split])
+    S2[r] = -1
+    P2[r] = 0.0
+    S2[r, :S.shape[1]] = S[split]
+    P2[r, :S.shape[1]] = P[split]
+    osc2 = np.zeros(len(idx), dtype=bool)
+    osc2[np.searchsorted(idx, U)] = osc
+    return idx, S2, P2, osc2
+
+
 @dataclass
 class StateMonitor:
     """Tracks the run iteration by iteration and decides when the Markov step intervenes."""
@@ -248,6 +355,12 @@ class StateMonitor:
         W = self.params.window
         rows = [s % (W + 1) for s in range(max(0, t - W), t + 1)]
         return self.H[np.ix_(rows, idx)]
+
+    def centers_window(self):
+        """Centers of the last min(t, W) + 1 iterations, oldest first, shape (m, k, d)."""
+        W, t = self.params.window, self.t
+        rows = [i % (W + 1) for i in range(max(0, t - W), t + 1)]
+        return self._Cring[rows]
 
     def unstable(self):
         return _recent(self.last_change, self.t - self.params.window)

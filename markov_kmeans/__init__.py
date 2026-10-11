@@ -2,9 +2,10 @@
 
 K-means that watches the state of the whole run (how many points still move, how stable
 the representatives and the partition are), stops once only a few points keep changing
-cluster, and settles those points from their own label histories: the long-run law of
-their label Markov chain for points that drifted, their occupancy for points that keep
-oscillating (hard label = most likely cluster, soft membership = the whole distribution).
+cluster, and finishes the run by Markov chains: the path of each center gives its long-run
+position (the pseudo representative), every point goes to its nearest pseudo
+representative, and the points still undecided get soft memberships from their own label
+histories (hard label = most likely cluster, soft membership = the whole distribution).
 
     >>> from markov_kmeans import MarkovKMeans
     >>> mk = MarkovKMeans(n_clusters=50, random_state=0).fit(X)
@@ -16,4 +17,4 @@ from .assign import HistoryAssignment, assign_from_history
 from .estimator import MarkovKMeans
 
 __all__ = ["MarkovKMeans", "assign_from_history", "HistoryAssignment"]
-__version__ = "0.3.1"
+__version__ = "0.4.0"

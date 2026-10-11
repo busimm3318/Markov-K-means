@@ -45,7 +45,7 @@ def test_fixed_t0_settles_exactly_the_unstable_set(blobs):
 def test_adaptive_stop_rule(blobs):
     mk = MarkovKMeans(12, unstable_tol=0.02, min_iter=5, window=5, random_state=0).fit(blobs)
     if mk.stop_reason_ == "few_unstable":
-        assert mk.unstable_fraction_ <= 0.02
+        assert mk.decision_trace_[-1]["unstable_frac"] <= 0.02
         assert mk.n_iter_ >= 5
     assert mk.stop_reason_ in ("few_unstable", "converged", "oscillation")
     assert mk.n_dist_ > 0 and mk.inertia_ > 0
@@ -285,3 +285,126 @@ def test_monitor_kernels_match_numpy():
     np.testing.assert_array_equal(_rules._sizes(dst, 7), np.bincount(dst, minlength=7))
     np.testing.assert_array_equal(_rules._recent(last, 2), np.flatnonzero(last > 2))
     assert _rules._count_recent(last, 2) == int((last > 2).sum())
+
+
+# ----------------------------------------------------------------------------- pseudo representatives
+
+def test_long_run_centers_extrapolates_a_drift_and_averages_jitter():
+    s = np.arange(12)[:, None, None]
+    path = np.array([[5.0, 2.0]]) + 0.7 ** s * np.array([[-3.0, 1.0]])     # c_{s+1} - c* = 0.7 (c_s - c*)
+    C, rho = _rules.long_run_centers(path)
+    np.testing.assert_allclose(C, [[5.0, 2.0]], atol=1e-9)
+    np.testing.assert_allclose(rho, [0.7], atol=1e-9)
+    noise = np.random.default_rng(0).normal(size=(400, 1, 2)) + np.array([3.0, -1.0])
+    C, rho = _rules.long_run_centers(noise)
+    np.testing.assert_allclose(C, noise.mean(0), atol=0.02)
+    assert rho[0] < 0.2
+    _, rho = _rules.long_run_centers(np.arange(6, dtype=float)[:, None, None] * np.ones((1, 1, 2)), rho_max=0.9)
+    assert rho[0] == pytest.approx(0.9)                                      # a steady travel is clipped
+
+
+def test_crossing_fraction_on_a_moving_boundary():
+    C0, C1 = np.array([[0.0], [4.0]]), np.array([[0.0], [2.0]])           # boundary moves from 2 to 1
+    f = _rules.crossing_fraction(np.array([[1.5], [1.9], [1.1]]), np.array([0, 0, 0]), np.array([1, 1, 1]), C0, C1)
+    np.testing.assert_allclose(f, [0.5, 0.1, 0.9])
+
+
+def test_undecided_keeps_oscillators_and_splits_movers():
+    U = np.array([2, 7])
+    S = np.array([[0, 1, -1], [1, -1, -1]])
+    P = np.array([[0.6, 0.4, 0.0], [1.0, 0.0, 0.0]])
+    labels = np.array([0, 0, 1, 0, 0, 2, 0, 1])
+    current = np.array([0, 0, 1, 0, 0, 0, 0, 1])
+    idx, S2, P2, osc = _rules.undecided(U, S, P, np.array([True, False]), np.array([5]), np.array([0.4]),
+                                        labels, current)
+    np.testing.assert_array_equal(idx, [2, 5, 7])
+    np.testing.assert_allclose(P2.sum(1), 1.0)
+    np.testing.assert_array_equal(S2[0, :2], [0, 1])          # history law kept
+    np.testing.assert_allclose(P2[0, :2], [0.6, 0.4])
+    np.testing.assert_array_equal(S2[1, :2], [2, 0])          # mover: new 1 - f/2, old f/2
+    np.testing.assert_allclose(P2[1, :2], [0.8, 0.2])
+    np.testing.assert_array_equal(S2[2, :1], [1])
+    np.testing.assert_array_equal(osc, [True, False, False])
+
+
+@pytest.mark.parametrize("algorithm,t0", [("hamerly", 6), ("hamerly", 10), ("minibatch", 6)])
+def test_pseudo_representatives_never_raise_the_sse(blobs, algorithm, t0):
+    kw = dict(algorithm=algorithm, t0=t0, window=5, center_update="hard", random_state=1, batch_size=512)
+    cur = MarkovKMeans(12, representatives="current", **kw).fit(blobs)
+    mk = MarkovKMeans(12, **kw).fit(blobs)
+    assert not cur.pseudo_accepted_ and len(cur.predicted_moves_) == 0
+    np.testing.assert_array_equal(mk.labels_at_stop_, cur.labels_at_stop_)
+    assert mk.inertia_ <= cur.inertia_ * (1 + 1e-12)
+    extra = mk.n_dist_ - cur.n_dist_
+    assert 0 <= extra <= len(blobs) * 12 and (extra == len(blobs) * 12 or algorithm == "hamerly")
+    assert mk.pseudo_centers_.shape == (12, blobs.shape[1]) and mk.center_rho_.shape == (12,)
+    if mk.pseudo_accepted_:
+        moved = mk.labels_ != mk.labels_at_stop_
+        np.testing.assert_array_equal(np.flatnonzero(moved), mk.predicted_moves_)
+        assert np.isin(mk.predicted_moves_, mk.unstable_indices_).all()
+    else:
+        np.testing.assert_array_equal(mk.labels_, cur.labels_)
+    M = mk.membership_
+    np.testing.assert_allclose(np.asarray(M.sum(1)).ravel(), 1.0)
+    stable = np.ones(len(blobs), bool)
+    stable[mk.unstable_indices_] = False
+    np.testing.assert_array_equal(mk.labels_[stable], mk.labels_at_stop_[stable])
+
+
+@pytest.mark.parametrize("algorithm", ["hamerly", "lloyd", "minibatch"])
+def test_engine_nearest_is_exact(blobs, algorithm):
+    from markov_kmeans._engines import HamerlyEngine, LloydEngine, MiniBatchEngine
+    from markov_kmeans._kernels import nearest_all
+
+    C0 = datasets.init_random(blobs, 12, seed=2)
+    e = {"hamerly": HamerlyEngine, "lloyd": LloydEngine, "minibatch": MiniBatchEngine}[algorithm](blobs, C0)
+    for _ in range(4):
+        e.step()
+    before = e.labels.copy()
+    C = e.centers + np.random.default_rng(0).normal(scale=0.3, size=e.centers.shape)
+    lab, nd = e.nearest(C)
+    ref = np.full(len(blobs), -1, dtype=np.int64)
+    nearest_all(blobs, C, ref)
+    np.testing.assert_array_equal(lab, ref)
+    np.testing.assert_array_equal(e.labels, before)
+    assert 0 < nd <= len(blobs) * 12
+
+
+def test_pseudo_labels_are_nearest_to_pseudo_centers(blobs):
+    mk = MarkovKMeans(12, t0=10, window=5, center_update="pseudo", random_state=1).fit(blobs)
+    assert mk.pseudo_accepted_
+    np.testing.assert_array_equal(mk.labels_, mk.predict(blobs))
+    np.testing.assert_array_equal(mk.cluster_centers_, mk.pseudo_centers_)
+
+
+def test_converged_run_has_no_pseudo_step(blobs):
+    C0 = datasets.init_random(blobs, 12, seed=1)
+    mk = MarkovKMeans(12, init=C0, stop_rule="unstable", unstable_tol=0.0, max_iter=1000).fit(blobs)
+    assert mk.stop_reason_ == "converged" and not mk.pseudo_accepted_
+    np.testing.assert_array_equal(mk.pseudo_centers_, mk.cluster_centers_)
+
+
+def test_pseudo_parameters_are_validated(blobs):
+    with pytest.raises(ValueError):
+        MarkovKMeans(3, representatives="future").fit(blobs)
+    with pytest.raises(ValueError):
+        MarkovKMeans(3, rho_max=1.0).fit(blobs)
+    with pytest.raises(ValueError):
+        MarkovKMeans(3, center_update="median").fit(blobs)
+
+
+def test_sse_change_matches_a_full_recomputation():
+    from markov_kmeans._kernels import compute_centers, inertia
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(3000, 5)) * 40 + 900                               # far from the origin
+    L = rng.integers(0, 7, 3000)
+    new = L.copy()
+    idx = rng.choice(3000, 200, replace=False)
+    new[idx] = rng.integers(0, 7, 200)
+    new[L == 2] = 4                                                          # one cluster empties
+    idx = np.flatnonzero(new != L)
+    M0, n0 = compute_centers(X, L, np.zeros((7, 5)))
+    full = inertia(X, compute_centers(X, new, M0)[0], new) - inertia(X, M0, L)
+    assert _rules.sse_change(X, L, new, idx, M0, n0) == pytest.approx(full, rel=1e-8)
+    assert _rules.sse_change(X, L, L, idx, M0, n0) == 0.0
