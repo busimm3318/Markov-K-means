@@ -354,9 +354,11 @@ def run(only=None):
 RULE_NAMES = {"envi_2pct_10": "changed < 2 % or 10 iterations (ENVI)", "pct5_10": "changed < 5 % or 10 iterations",
               "pct2": "changed < 2 %", "sklearn_tol": "scikit-learn tol", "markov_auto": "Markov-K-means (auto)",
               "full": "to convergence"}
+RULE_NAMES["markov_nomon"] = "Markov-K-means, stopping point only"
 RULE_KO = {"envi_2pct_10": "변경 < 2 % 또는 10회 (ENVI 기본값)", "pct5_10": "변경 < 5 % 또는 10회",
            "pct2": "변경 < 2 % (상한 없음)", "sklearn_tol": "scikit-learn tol (기본값)",
-           "markov_auto": "Markov-K-means (기본값)", "full": "끝까지 (기준)"}
+           "markov_auto": "Markov-K-means (기본값)", "markov_nomon": "Markov-K-means 정지 시점 (감시 비용 제외)",
+           "full": "끝까지 (기준)"}
 
 
 def report():
@@ -365,6 +367,15 @@ def report():
     rules = pd.read_csv(os.path.join(RESULTS, "sentinel2_rules.csv"))
     curves = pd.read_csv(os.path.join(RESULTS, "sentinel2_curves.csv"))
     runs = pd.read_csv(os.path.join(RESULTS, "sentinel2_runs.csv")).set_index("site")
+    scenes = pd.read_csv(os.path.join(RESULTS, "sentinel2_scenes.csv")).set_index("site")
+    runs["item"] = scenes.loc[runs.index, "item"]          # early runs logged a method object here
+    # the stopping point alone: Markov-K-means' time without the monitor's bookkeeping
+    m = rules[rules.rule == "markov_auto"].set_index("site")
+    nomon = m.copy()
+    nomon["seconds"] = m.seconds - runs.loc[m.index, "monitor_s"]
+    nomon["time_frac"] = nomon.seconds / runs.loc[m.index, "total_s"]
+    nomon["rule"] = "markov_nomon"
+    rules = pd.concat([rules, nomon.reset_index()], ignore_index=True)
     mix = pd.read_csv(os.path.join(RESULTS, "sentinel2_mixing.csv")).set_index("site")
     sites = list(runs.index)
     short = {s_: s_.split(" (")[0] for s_ in sites}
@@ -424,7 +435,7 @@ def report():
                                                       "ENVI 정지": "{}", "2 % 도달": "{:.0f}", "Markov 정지": "{}"},
                                index_name="장면")
     agg = {}
-    for rule in RULES:
+    for rule in RULES[:-1] + ("markov_nomon", "full"):
         d = rules[rules.rule == rule]
         agg[RULE_KO[rule]] = {"시간 (중앙값)": d.time_frac.median(),
                               "시간 (범위)": f"{d.time_frac.min():.0%}–{d.time_frac.max():.0%}",
@@ -437,12 +448,13 @@ def report():
     u.index = [short[s_] for s_ in u.index]
     u.columns = ["미결정 비율", "미결정 중 틀린 비율", "틀린 점 중 미결정 비율", "미결정: 유지 오차", "미결정: 정리 오차"]
     T["sentinel2_unstable"] = md(u, "{:.2%}", index_name="장면")
-    m = mix[["U_frac", "mixed_frac_in_U", "mixed_frac_outside_U", "auroc_U", "auroc_uncertainty", "auroc_distance_ratio",
-             "corr_pi_share"]].copy()
+    m = mix.reindex(columns=["U_frac", "mixed_frac_in_U", "mixed_frac_outside_U", "auroc_U", "auroc_uncertainty",
+                             "auroc_distance_ratio", "n_fractional"]).copy()
     m.index = [short[s_] for s_ in m.index]
     m.columns = ["미결정 비율", "혼합 화소 비율: 미결정", "혼합 화소 비율: 나머지", "AUROC: 미결정 여부", "AUROC: 1 − max π",
-                 "AUROC: 거리 비", "상관: π와 하위 화소 비율"]
-    T["sentinel2_mixing"] = md(m, {c_: ("{:.2f}" if c_.startswith(("AUROC", "상관")) else "{:.1%}") for c_ in m.columns},
+                 "AUROC: 거리 비", "분수형 소속도를 받은 화소 수"]
+    T["sentinel2_mixing"] = md(m, {c_: ("{:.2f}" if c_.startswith("AUROC") else "{:,.0f}" if c_.startswith("분수형")
+                                       else "{:.1%}") for c_ in m.columns},
                                index_name="장면")
     fill_report(T)
     for k_, v in T.items():
