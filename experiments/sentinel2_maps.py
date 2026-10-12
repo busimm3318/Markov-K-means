@@ -147,13 +147,31 @@ def draw(store, path, dpi=100):
     plt.close(fig)
 
 
+class UniformDraws(np.random.RandomState):
+    """Random state whose weighted draws of indices with replacement are uniform draws.
+
+    scikit-learn >= 1.5 draws every minibatch with ``choice(n, batch_size, p=weights)``: a pass over
+    all n weights per step, about one second on thirty million pixels. Without sample weights the
+    weights are all equal, so a uniform draw (``randint``) is the same distribution in O(batch_size).
+    """
+
+    def choice(self, a, size=None, replace=True, p=None):
+        if p is not None and replace and isinstance(a, (int, np.integer)):
+            return self.randint(0, a, size)
+        return super().choice(a, size, replace, p)
+
+
 def minibatch(X, ref, k, seed):
-    """scikit-learn MiniBatchKMeans with its defaults; its clusters matched one to one with ``ref``'s."""
+    """scikit-learn MiniBatchKMeans with its defaults; its clusters matched one to one with ``ref``'s.
+
+    Minibatches are drawn uniformly in O(batch_size) (``UniformDraws``) instead of scikit-learn's
+    O(n) weighted draw; with no sample weights the two are the same distribution.
+    """
     from scipy.optimize import linear_sum_assignment
     from sklearn.cluster import MiniBatchKMeans
 
     t0 = time.perf_counter()
-    mb = MiniBatchKMeans(n_clusters=k, random_state=seed).fit(X)
+    mb = MiniBatchKMeans(n_clusters=k, random_state=UniformDraws(seed)).fit(X)
     secs = time.perf_counter() - t0
     conf = np.zeros((k, k), dtype=np.int64)
     np.add.at(conf, (mb.labels_, ref), 1)
@@ -198,10 +216,12 @@ def run():
                          markov_error=rules.loc["markov_auto", "error"], envi_error=rules.loc["envi_2pct_10", "error"],
                          pct5_error=rules.loc["pct5_10", "error"], sklearn_error=rules.loc["sklearn_tol", "error"],
                          minibatch_mismatch=mismatch, minibatch_sse_excess=mbinfo["sse_excess"],
-                         minibatch_s=mb_s, minibatch_time_frac=mb_s / extra["total_s"]))
-        print(s.site, f"{time.perf_counter() - t0:.0f}s", rows[-1]["markov_error"], flush=True)
+                         minibatch_s=mb_s, minibatch_time_frac=mb_s / extra["total_s"],
+                         minibatch_steps=int(mb.n_steps_), minibatch_epochs=mb.n_steps_ * mb._batch_size / extra["n"]))
+        pd.DataFrame(rows).to_csv(os.path.join(RESULTS, "sentinel2_maps.csv"), index=False)     # after every scene
+        print(s.site, f"{time.perf_counter() - t0:.0f}s", rows[-1]["markov_error"],
+              f"minibatch {mb_s:.0f}s / {int(mb.n_steps_)} steps", flush=True)
         del cube, valid, snaps
-    pd.DataFrame(rows).to_csv(os.path.join(RESULTS, "sentinel2_maps.csv"), index=False)
 
 
 def redraw(out=OUT, dpi=100):
