@@ -395,9 +395,13 @@ class StateMonitor:
         t = self.t
         lab = np.ascontiguousarray(labels)
         if t > 0:
-            movers = _record(lab, self.H[(t - 1) % (W + 1)], self.H[t % (W + 1)], self.last_change, t)
+            prev, dst = self.H[(t - 1) % (W + 1)], self.H[t % (W + 1)]
+            movers = _record(lab, prev, dst, self.last_change, t)
             self._movers[t % (W + 1)] = movers
-            self._Sring[t % (W + 1)] = _sizes(self.H[t % (W + 1)], self.k)
+            # cluster sizes, updated from the movers only
+            self._Sring[t % (W + 1)] = (self._Sring[(t - 1) % (W + 1)]
+                                        - np.bincount(prev[movers], minlength=self.k)
+                                        + np.bincount(dst[movers], minlength=self.k))
             self.counts.append(len(movers) if changed is None else int(changed))
             step = np.sqrt(((centers - self._C) ** 2).sum(1))
             self.drift.append(float((step / _half_nearest(centers)).max()))

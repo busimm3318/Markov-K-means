@@ -7,8 +7,9 @@ their decisions can be compared one to one:
 
     exact      Hamerly, k = 12, until the automatic stop: per-iteration cost of the monitor
                (recording the label chains and judging the run), identical decisions required
-    oscillate  constant-step mini-batch (an EMA codebook), k = 12, a fixed number of epochs: the
-               unstable set is large, so the cost of the label chains' long-run laws shows
+    oscillate  constant-step mini-batch (an EMA codebook), k = 12, a fixed number of epochs, every
+               epoch recorded and judged: the unstable set is large, so the cost of the label
+               chains' long-run laws shows
 
     python -m experiments.markov_speed     # -> experiments/results/markov_speed.csv
 """
@@ -54,14 +55,17 @@ def _timed(f, *a, **kw):
     return out, time.perf_counter() - t0
 
 
-def lockstep(engine, monitors, max_iter, rule="auto"):
-    """Feed the same iterates to several monitors; per monitor: seconds, trace, stop iteration."""
+def lockstep(engine, monitors, max_iter, rule="auto", halt=True):
+    """Feed the same iterates to several monitors; per monitor: seconds, trace, stop iteration.
+
+    ``halt=False`` keeps feeding (and judging) a monitor after it decided to stop.
+    """
     for m in monitors:
         m.push(engine.labels, engine.centers)
     secs = [0.0] * len(monitors)
     stopped = [None] * len(monitors)
     step_s, t = 0.0, 0
-    while t < max_iter and not all(s is not None for s in stopped):
+    while t < max_iter and not (halt and all(s is not None for s in stopped)):
         (changed), dt = _timed(engine.step)
         step_s += dt
         t += 1
@@ -72,7 +76,7 @@ def lockstep(engine, monitors, max_iter, rule="auto"):
             m.push(engine.labels, engine.centers, changed)
             stop, _, _ = m.assess() if rule == "auto" else (False, None, None)
             secs[j] += time.perf_counter() - t0
-            if stop:
+            if stop and halt:
                 stopped[j] = t
         if changed == 0 and engine.exact:
             break
@@ -115,10 +119,11 @@ def run():
     epochs = 15
     mons = [ref_rules.StateMonitor(n, k, ref_rules.StopParams(), exact=False),
             _rules.StateMonitor(n, k, _rules.StopParams(), exact=False)]
-    secs, step_s, t, _ = lockstep(eng, mons, epochs, rule="none")
+    secs, step_s, t, _ = lockstep(eng, mons, epochs, halt=False)
+    same_trace = mons[0].trace == mons[1].trace
     U0, U1 = mons[0].unstable(), mons[1].unstable()
     Hw0, Hw1 = mons[0].window(U0), mons[1].window(U1)
-    same_window = np.array_equal(U0, U1) and np.array_equal(np.asarray(Hw0, np.int64), Hw1)
+    same_window = same_trace and np.array_equal(U0, U1) and np.array_equal(np.asarray(Hw0, np.int64), Hw1)
     ref_markov.stationary(Hw0[:, :100])
     _markov.stationary(Hw1[:, :100])
     (S0, P0), s_ref = _timed(ref_markov.stationary, Hw0)
