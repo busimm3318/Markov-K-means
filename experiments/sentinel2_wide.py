@@ -175,6 +175,13 @@ def run():
 
 # ----------------------------------------------------------------------------- report
 
+def fixed_stops(curve):
+    """Time (share of the full run) and error of stopping after each checkpoint iteration."""
+    c = curve.dropna(subset=["error"]).copy()
+    c["time_frac"] = c.cum_s / curve.cum_s.iloc[-1]
+    return c[["t", "time_frac", "error"]]
+
+
 def report():
     from matplotlib.colors import LogNorm
 
@@ -205,6 +212,12 @@ def report():
            "pixels changing cluster (%, log)", "iteration (log)")
     ax.legend(frameon=False, fontsize=9, labelcolor=INK2, loc="lower left")
     ax = axes[1]
+    fixed = fixed_stops(curve)
+    ax.plot(fixed.time_frac, fixed.error * 100, color=GRID, lw=2.2, marker="o", ms=4, mfc=INK2, mec=INK2, zorder=2,
+            label="fixed number of iterations (labels: iterations)")
+    for _, f in fixed[fixed.t.isin([10, 100, 300, 1000, 2000])].iterrows():
+        ax.annotate(f"{int(f.t)}", (f.time_frac, f.error * 100), textcoords="offset points", xytext=(4, 5),
+                    fontsize=8.5, color=INK2)
     for rule, (col, mk) in style.items():
         r = rules.loc[rule]
         ax.scatter([r.time_frac], [max(r.error, 1e-6) * 100], color=col, marker=mk, s=150, edgecolor=INK,
@@ -247,23 +260,25 @@ def report():
     rows = {}
     for rule in RULES:
         r = rules.loc[rule]
-        rows[RULE_KO[rule]] = {"정지 반복": int(r.iterations), "시간": r.time_frac, "오차": r.error,
-                               "SSE 초과": r.sse_excess}
+        rows[RULE_KO[rule]] = {"정지 반복": f"{int(r.iterations):,}", "시간": f"{r.time_frac:.0%}",
+                               "오차": f"{r.error:.2%}", "SSE 초과": f"{r.sse_excess:.3%}"}
+    for _, f in fixed[fixed.t.isin([300, 700, 1000, 1500, 2000])].iterrows():
+        rows[f"고정 {int(f.t):,}회"] = {"정지 반복": f"{int(f.t):,}", "시간": f"{f.time_frac:.0%}",
+                                       "오차": f"{f.error:.2%}", "SSE 초과": "–"}
     if "minibatch_s" in run_:
         rows["scikit-learn MiniBatchKMeans (기본값, 다른 알고리즘)"] = {
-            "정지 반복": f"{int(run_.minibatch_steps):,} 미니배치", "시간": run_.minibatch_time_frac, "오차": np.nan,
-            "SSE 초과": run_.minibatch_sse_excess}
-    T["sentinel2_wide_rules"] = md(pd.DataFrame(rows).T, {"정지 반복": "{}", "시간": "{:.0%}", "오차": "{:.3%}",
-                                                          "SSE 초과": "{:.3%}"}, index_name="정지 규칙")
-    info = {"화소 수 (백만)": run_.n / 1e6, "수렴 반복": int(run_.total_iter),
-            "수렴 여부": "예" if run_.converged else f"상한 {MAX_ITER}",
-            "끝까지 걸린 시간 (분)": run_.total_s / 60, "Markov 정지": f"{int(rules.loc['markov_auto', 'iterations'])} "
-                                                                f"({run_.markov_reason})",
-            "감시기 비용": run_.monitor_s / run_.total_s, "의사 대표점 단계": run_.pseudo_s / run_.total_s,
-            "옮긴 화소": run_.moves_frac, "옮긴 화소 중 맞은 비율": run_.moves_right,
-            "고친 화소": int(run_.fixed), "망친 화소": int(run_.broken),
-            "틀린 화소 중 미결정: 0.3": run_.U_recall, "틀린 화소 중 미결정: 0.4": run_.undecided_recall}
-    T["sentinel2_wide_run"] = md(pd.DataFrame({"값": info}), {"값": "{}"}, index_name="항목")
+            "정지 반복": f"미니배치 {int(run_.minibatch_steps)}개", "시간": f"{run_.minibatch_time_frac:.1%}",
+            "오차": "–", "SSE 초과": f"{run_.minibatch_sse_excess:.1%}"}
+    T["sentinel2_wide_rules"] = md(pd.DataFrame(rows).T, "{}", index_name="정지 규칙")
+    info = {"화소 수": f"{run_.n / 1e6:.1f}백만 ({int(run_.height):,} × {int(run_.width):,} 격자의 {run_.n / (run_.height * run_.width):.1%})",
+            "수렴": f"{int(run_.total_iter):,}회, {run_.total_s / 60:.0f}분" + ("" if run_.converged else f" (상한 {MAX_ITER})"),
+            "Markov 정지": f"{int(rules.loc['markov_auto', 'iterations'])}회 ({run_.markov_reason})",
+            "감시기 비용": f"끝까지 돌린 시간의 {run_.monitor_s / run_.total_s:.1%}",
+            "의사 대표점 단계": f"{run_.pseudo_s / run_.total_s:.1%} (채택: {'예' if run_.pseudo_accepted else '아니오'}, ρ 중앙값 {run_.rho_median:.2f})",
+            "옮긴 화소": f"{run_.moves_frac:.2%}, 그중 맞은 비율 {run_.moves_right:.0%}",
+            "고친 / 망친 화소": f"{int(run_.fixed):,} / {int(run_.broken):,}",
+            "틀린 화소 중 미결정 목록에 든 비율": f"0.3: {run_.U_recall:.1%}, 0.4: {run_.undecided_recall:.1%}"}
+    T["sentinel2_wide_run"] = md(pd.DataFrame({"값": info}), "{}", index_name="항목")
     sc = scenes[["tile", "datetime", "cloud_cover", "nodata"]].copy()
     sc["datetime"] = sc.datetime.str[:10]
     sc = sc.set_index("tile")
