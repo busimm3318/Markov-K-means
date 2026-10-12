@@ -12,7 +12,7 @@ are drawn at 100 m (every fifth 20 m pixel):
             red: one pixel to all, log scale); MiniBatchKMeans reaches another partition, so its
             clusters are first matched one to one with the converged ones (Hungarian matching)
 
-The downsampled maps are kept in experiments/results/sentinel2_maps/<site>.npz.
+The downsampled maps are kept in experiments/results/sentinel2_maps/<site>.npz (not tracked by git).
 
     python -m experiments.sentinel2_maps     # -> docs/figures/sentinel2_maps/<site>.jpg, sentinel2_maps.csv
 """
