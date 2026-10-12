@@ -1,0 +1,2 @@
+site,file,tile,date,n,total_iter,markov_iter,markov_error,envi_error,pct5_error,sklearn_error,minibatch_mismatch,minibatch_sse_excess,minibatch_s,minibatch_time_frac,minibatch_steps,minibatch_epochs
+"Seoul (urban, forest, river)",seoul.jpg,52SCG,2024-11-12,29949010,156,71,0.00022027439304337607,0.14593163513585258,0.1992539987131461,0.008921496904238237,0.2003540016848637,0.0501526954184075,1.5397240380007133,0.0184366621854141,179,0.006120269084019805
