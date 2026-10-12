@@ -61,8 +61,8 @@ def luminance(img):
 
 
 def grey(img, v, lo, hi):
-    """``img`` in light grey tones (luminance ``lo``-``hi`` to 0.4-0.95), so red stands out on any land cover."""
-    out = np.repeat((0.4 + 0.55 * np.clip((luminance(img) - lo) / max(hi - lo, 1e-6), 0, 1))[..., None], 3, axis=2)
+    """``img`` in light, low-contrast grey (luminance ``lo``-``hi`` to 0.62-0.92), so red stands out on any land cover."""
+    out = np.repeat((0.62 + 0.3 * np.clip((luminance(img) - lo) / max(hi - lo, 1e-6), 0, 1))[..., None], 3, axis=2)
     out[~v] = 1.0
     return out
 
@@ -142,7 +142,8 @@ def draw(store, path, dpi=100):
                 sp.set_visible(False)
     fig.suptitle(titles["name"], x=0.01, ha="left", fontsize=13, color=INK2)
     fig.tight_layout(rect=(0, 0, 1, 0.97), h_pad=2.2)
-    fig.savefig(path, dpi=dpi, pil_kwargs={"quality": 85, "optimize": True})
+    # full-resolution chroma: with JPEG's default 4:2:0 a lone red pixel fades to grey
+    fig.savefig(path, dpi=dpi, pil_kwargs={"quality": 85, "subsampling": 0, "optimize": True})
     plt.close(fig)
 
 
