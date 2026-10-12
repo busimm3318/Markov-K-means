@@ -66,7 +66,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 from . import _markov as _mk
 
@@ -107,9 +107,30 @@ def plateau(values, window, ratio):
     return first > 0 and second >= ratio * first
 
 
+@njit(cache=True)
+def _net_flow_dense(Hw, k):
+    T = np.zeros((k, k), dtype=np.int64)
+    moved = 0
+    for t in range(Hw.shape[0] - 1):
+        for i in range(Hw.shape[1]):
+            a, b = Hw[t, i], Hw[t + 1, i]
+            if a != b:
+                T[a, b] += 1
+                moved += 1
+    if moved == 0:
+        return 0.0
+    net = 0
+    for a in range(k):
+        for b in range(a + 1, k):
+            net += abs(T[a, b] - T[b, a])
+    return net / moved
+
+
 def net_flow(Hw, k):
     """Net over gross transfers between cluster pairs in a (W+1, m) label window."""
-    Hw = np.asarray(Hw, dtype=np.int64)
+    Hw = np.ascontiguousarray(Hw, dtype=np.int64)
+    if k <= 4096:                              # a dense k x k transfer count fits easily
+        return float(_net_flow_dense(Hw, k))
     a, b = Hw[:-1].ravel(), Hw[1:].ravel()
     moved = a != b
     if not moved.any():
@@ -147,55 +168,96 @@ def _half_nearest(C):
     return 0.5 * D.min(1)
 
 
-@njit(cache=True)
+_CHUNKS = 64     # fixed work split of the parallel kernels: results never depend on the thread count
+
+
+@njit(cache=True, parallel=True)
 def _record(labels, prev, dst, last_change, t):
-    """One pass over the labels: store them in the ring buffer, stamp the movers, count them."""
-    moved = 0
-    for i in range(labels.shape[0]):
-        v = labels[i]
-        if v != prev[i]:
-            last_change[i] = t
-            moved += 1
-        dst[i] = v
-    return moved
+    """Store the labels in the ring buffer, stamp the movers; return the movers' indices (ascending)."""
+    n = labels.shape[0]
+    cnt = np.zeros(_CHUNKS + 1, dtype=np.int64)
+    for c in prange(_CHUNKS):
+        m = 0
+        for i in range(c * n // _CHUNKS, (c + 1) * n // _CHUNKS):
+            v = labels[i]
+            if v != prev[i]:
+                last_change[i] = t
+                m += 1
+            dst[i] = v
+        cnt[c + 1] = m
+    for c in range(_CHUNKS):
+        cnt[c + 1] += cnt[c]
+    movers = np.empty(cnt[_CHUNKS], dtype=np.int64)
+    for c in prange(_CHUNKS):
+        if cnt[c + 1] == cnt[c]:
+            continue
+        j = cnt[c]
+        for i in range(c * n // _CHUNKS, (c + 1) * n // _CHUNKS):
+            if dst[i] != prev[i]:
+                movers[j] = i
+                j += 1
+    return movers
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _store(labels, dst):
-    for i in range(labels.shape[0]):
+    for i in prange(labels.shape[0]):
         dst[i] = labels[i]
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _sizes(labels, k):
+    n = labels.shape[0]
+    local = np.zeros((_CHUNKS, k), dtype=np.int64)
+    for c in prange(_CHUNKS):
+        for i in range(c * n // _CHUNKS, (c + 1) * n // _CHUNKS):
+            local[c, labels[i]] += 1
     out = np.zeros(k, dtype=np.float64)
-    for i in range(labels.shape[0]):
-        out[labels[i]] += 1.0
+    for c in range(_CHUNKS):
+        for j in range(k):
+            out[j] += local[c, j]
     return out
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _count_recent(last_change, since):
     m = 0
-    for i in range(last_change.shape[0]):
+    for i in prange(last_change.shape[0]):
         if last_change[i] > since:
             m += 1
     return m
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _recent(last_change, since):
-    """Indices whose last change is after ``since`` (two passes, no n-sized temporaries)."""
-    m = 0
-    for i in range(last_change.shape[0]):
-        if last_change[i] > since:
-            m += 1
-    out = np.empty(m, dtype=np.int64)
-    j = 0
-    for i in range(last_change.shape[0]):
-        if last_change[i] > since:
-            out[j] = i
-            j += 1
+    """Indices whose last change is after ``since``, ascending (count per chunk, then fill)."""
+    n = last_change.shape[0]
+    cnt = np.zeros(_CHUNKS + 1, dtype=np.int64)
+    for c in prange(_CHUNKS):
+        m = 0
+        for i in range(c * n // _CHUNKS, (c + 1) * n // _CHUNKS):
+            if last_change[i] > since:
+                m += 1
+        cnt[c + 1] = m
+    for c in range(_CHUNKS):
+        cnt[c + 1] += cnt[c]
+    out = np.empty(cnt[_CHUNKS], dtype=np.int64)
+    for c in prange(_CHUNKS):
+        j = cnt[c]
+        for i in range(c * n // _CHUNKS, (c + 1) * n // _CHUNKS):
+            if last_change[i] > since:
+                out[j] = i
+                j += 1
+    return out
+
+
+@njit(cache=True, parallel=True)
+def _gather(H, rows, idx):
+    """H[rows][:, idx] as an int64 (len(rows), len(idx)) array."""
+    out = np.empty((rows.shape[0], idx.shape[0]), dtype=np.int64)
+    for j in prange(idx.shape[0]):
+        for r in range(rows.shape[0]):
+            out[r, j] = H[rows[r], idx[j]]
     return out
 
 
@@ -251,7 +313,11 @@ def sse_change(X, current, new, idx, centers, counts):
     - |sum_in (x - m_j) - sum_out (x - m_j)|^2 / n'_j.
     """
     idx = np.asarray(idx, dtype=np.int64)
-    a, b = current[idx], new[idx]
+    return sse_change_at(X, idx, current[idx], new[idx], centers, counts)
+
+
+def sse_change_at(X, idx, a, b, centers, counts):
+    """``sse_change`` given the labels of the points ``idx`` only: ``a`` before, ``b`` after."""
     keep = a != b
     idx, a, b = idx[keep], a[keep], b[keep]
     if len(idx) == 0:
@@ -319,6 +385,8 @@ class StateMonitor:
         self.t = -1
         self._C = None
         self._Cring = None    # centers of the last W+1 iterations
+        self._Sring = np.zeros((W + 1, self.k))    # cluster sizes of the last W+1 labelings
+        self._movers = [np.empty(0, dtype=np.int64) for _ in range(W + 1)]   # who changed at each of them
 
     def push(self, labels, centers, changed=None):
         """Record iteration t = 0, 1, 2, ... (t = 0 is the initial assignment)."""
@@ -327,12 +395,15 @@ class StateMonitor:
         t = self.t
         lab = np.ascontiguousarray(labels)
         if t > 0:
-            moved = _record(lab, self.H[(t - 1) % (W + 1)], self.H[t % (W + 1)], self.last_change, t)
-            self.counts.append(int(moved) if changed is None else int(changed))
+            movers = _record(lab, self.H[(t - 1) % (W + 1)], self.H[t % (W + 1)], self.last_change, t)
+            self._movers[t % (W + 1)] = movers
+            self._Sring[t % (W + 1)] = _sizes(self.H[t % (W + 1)], self.k)
+            self.counts.append(len(movers) if changed is None else int(changed))
             step = np.sqrt(((centers - self._C) ** 2).sum(1))
             self.drift.append(float((step / _half_nearest(centers)).max()))
         else:
             _store(lab, self.H[0])
+            self._Sring[0] = _sizes(self.H[0], self.k)
         self._C = np.array(centers, dtype=np.float64, copy=True)
         if self._Cring is None:
             self._Cring = np.empty((W + 1,) + self._C.shape)
@@ -353,8 +424,8 @@ class StateMonitor:
     def window(self, idx, t=None):
         t = self.t if t is None else t
         W = self.params.window
-        rows = [s % (W + 1) for s in range(max(0, t - W), t + 1)]
-        return self.H[np.ix_(rows, idx)]
+        rows = np.array([s % (W + 1) for s in range(max(0, t - W), t + 1)], dtype=np.int64)
+        return _gather(self.H, rows, np.asarray(idx, dtype=np.int64))
 
     def centers_window(self):
         """Centers of the last min(t, W) + 1 iterations, oldest first, shape (m, k, d)."""
@@ -362,8 +433,20 @@ class StateMonitor:
         rows = [i % (W + 1) for i in range(max(0, t - W), t + 1)]
         return self._Cring[rows]
 
+    def _last_moves(self):
+        """Per iteration of the window, the points whose last change happened then."""
+        W, t = self.params.window, self.t
+        for s_ in range(max(1, t - W + 1), t + 1):
+            mv = self._movers[s_ % (W + 1)]
+            yield mv[self.last_change[mv] == s_]
+
     def unstable(self):
-        return _recent(self.last_change, self.t - self.params.window)
+        """Points that changed cluster within the last W iterations (ascending), from the movers."""
+        parts = list(self._last_moves())
+        return np.sort(np.concatenate(parts)) if parts else np.empty(0, dtype=np.int64)
+
+    def unstable_count(self):
+        return int(sum(len(p_) for p_ in self._last_moves()))
 
     def assess(self):
         """Return (stop, regime, state) for the current iteration."""
@@ -374,7 +457,7 @@ class StateMonitor:
             return self._log(True, "converged", state)
         if t < max(p.min_iter, W):
             return self._log(False, "running", state)
-        u = _count_recent(self.last_change, t - W) / self.n
+        u = self.unstable_count() / self.n
         state["unstable_frac"] = u
         if u <= p.unstable_tol:
             return self._log(True, "drift", state)
@@ -393,8 +476,8 @@ class StateMonitor:
         # partitions
         U = self.unstable()
         cur = self.H[t % (W + 1)]
-        sizes = _sizes(cur, self.k)
-        old = _sizes(self.H[(t - W) % (W + 1)], self.k)
+        sizes = self._Sring[t % (W + 1)]
+        old = self._Sring[(t - W) % (W + 1)]
         cl_unstable = float((np.bincount(cur[U], minlength=self.k) / np.maximum(sizes, 1)).max())
         size_change = float((np.abs(sizes - old) / np.maximum(old, 1)).max())
         Hw = self.window(U)
