@@ -96,6 +96,75 @@ The tail is real on satellite images, and the right number of iterations varies 
 
 With many clusters over a whole region (the southern Korean peninsula as one mosaic, a few hundred clusters), the picture changes. Labels keep shifting between nearly identical clusters for thousands of iterations, while the fit has long stopped improving. Every stopping rule then lies on the same time–error curve as a fixed number of iterations. Markov-K-means finds, without tuning, the point where the fit has settled, but it does not reach the converged labels any sooner. scikit-learn's `MiniBatchKMeans` with its defaults stopped far too early there, with a much worse fit than any of these rules.
 
+**In numbers** (medians over the twelve scenes; *differing pixels* = share of pixels whose label differs from the converged map):
+
+| stopping rule | time (share of the converged run) | differing pixels | worst scene |
+|---|---|---|---|
+| remote-sensing default (< 2 % changed or 10 iterations) | 5 % | 22.6 % | 39.8 % |
+| changed < 5 % or 10 iterations | 3 % | 28.2 % | 46.5 % |
+| scikit-learn tolerance | 24 % | 2.4 % | 34.4 % |
+| scikit-learn `MiniBatchKMeans`, defaults (clusters matched one to one) | 1.5 % | 29.5 % | 47.2 % |
+| **Markov-K-means 0.4.1** | **57 %** | **0.07 %** | **0.35 %** |
+
+What the maps look like. Top row: the clusters each method returns, every pixel in the colour of its cluster's center. Bottom row: the true-colour image, then the same maps with the pixels that agree with the converged map in grey and the pixels that differ in red (Seoul, 30 million pixels, shown at 100 m):
+
+![Seoul: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/seoul.jpg)
+
+<details>
+<summary>The other eleven scenes</summary>
+
+**Iowa** (row crops): Markov-K-means 0.132%, scikit-learn tolerance 5.26%, remote-sensing default 25.0%, MiniBatchKMeans 34.6%
+
+![Iowa: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/iowa.jpg)
+
+**Central Valley** (irrigated farms): Markov-K-means 0.059%, scikit-learn tolerance 34.35%, remote-sensing default 39.8%, MiniBatchKMeans 32.2%
+
+![Central Valley: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/central_valley.jpg)
+
+**Sahara** (sand and rock desert): Markov-K-means 0.350%, scikit-learn tolerance 6.30%, remote-sensing default 21.4%, MiniBatchKMeans 36.0%
+
+![Sahara: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/sahara.jpg)
+
+**Nile Delta** (farms, desert, cities): Markov-K-means 0.008%, scikit-learn tolerance 2.04%, remote-sensing default 27.6%, MiniBatchKMeans 39.5%
+
+![Nile Delta: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/nile_delta.jpg)
+
+**Netherlands** (polders, water, towns): Markov-K-means 0.027%, scikit-learn tolerance 2.39%, remote-sensing default 14.7%, MiniBatchKMeans 47.2%
+
+![Netherlands: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/netherlands.jpg)
+
+**Swiss Alps** (mountains, snow, glaciers): Markov-K-means 0.029%, scikit-learn tolerance 1.87%, remote-sensing default 33.0%, MiniBatchKMeans 26.8%
+
+![Swiss Alps: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/swiss_alps.jpg)
+
+**Finland** (boreal forest, lakes): Markov-K-means 0.178%, scikit-learn tolerance 2.50%, remote-sensing default 32.1%, MiniBatchKMeans 21.6%
+
+![Finland: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/finland.jpg)
+
+**Ganges Plain** (smallholder farms): Markov-K-means 0.092%, scikit-learn tolerance 3.75%, remote-sensing default 23.8%, MiniBatchKMeans 26.8%
+
+![Ganges Plain: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/ganges_plain.jpg)
+
+**Central Australia** (arid savanna): Markov-K-means 0.201%, scikit-learn tolerance 5.77%, remote-sensing default 19.2%, MiniBatchKMeans 38.1%
+
+![Central Australia: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/central_australia.jpg)
+
+**Sundarbans** (mangroves, estuaries): Markov-K-means 0.007%, scikit-learn tolerance 0.60%, remote-sensing default 7.8%, MiniBatchKMeans 23.7%
+
+![Sundarbans: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/sundarbans.jpg)
+
+**Amazon** (rainforest, river): Markov-K-means 0.078%, scikit-learn tolerance 0.53%, remote-sensing default 6.8%, MiniBatchKMeans 16.9%
+
+![Amazon: each method's clusters, and the pixels that differ from the converged map in red](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/amazon.jpg)
+
+</details>
+
+The southern Korean peninsula as one mosaic (20 tiles, 55 million pixels at 60 m, k = 256): Markov-K-means stops at 52 % of the time with 5.8 % of labels different from the converged map (fit within 0.012 %), against 36 % for the remote-sensing default and 14 % for scikit-learn's tolerance. Red is mixed into each ~1 km block in proportion to its share of wrong labels:
+
+![Southern Korean peninsula: true colour, and where each rule's labels differ from the converged map](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/fig13_sentinel2_wide_maps.png)
+
+All tables and figures: [evaluation report, section 9](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md).
+
 ### Where it applies
 
 | base algorithm | boundary points | what Markov-K-means adds |
@@ -249,6 +318,75 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 위성영상에도 꼬리가 분명히 있고, 알맞은 반복 수가 장면마다 크게 달라서 고정된 설정 하나로는 모든 장면에서 수렴 결과에 닿지 못한다. 조정 없이 모든 장면에서 그곳에 닿는 규칙은 Markov-K-means뿐이다. 멈춘 시점에 아직 틀린 화소는 거의 모두 움직이기 시작하지도 않은 화소였고, 의사 대표점이 바로 그런 화소를 위한 것이다. 의사 대표점이 옮긴 화소는 거의 모두 수렴한 실행이 두는 곳으로 갔다. 저차원 영상에서는 늦은 반복이 원래 싸서 절약되는 시간은 크지 않다. 미결정 목록과 soft 소속도는 여기서 정보가 거의 없다. 장면들이 표류 후 정착하는 체제여서, 혼합 화소는 단순한 거리 비가 더 잘 가려낸다.
 
 넓은 지역 전체를 많은 군집으로 나누면(한반도 남부를 모자이크 하나로, 군집 수백 개) 양상이 달라진다. 적합도가 더 나아지지 않은 지 오래인데도, 거의 같은 군집끼리 라벨을 주고받는 일이 수천 회 이어진다. 이때는 모든 정지 규칙이 고정 반복 수와 같은 시간–오차 곡선 위에 놓인다. Markov-K-means는 조정 없이 적합도가 자리 잡은 지점을 찾지만, 수렴한 라벨에 더 빨리 닿지는 못한다. 같은 데이터에서 scikit-learn `MiniBatchKMeans` 기본값은 너무 일찍 멈춰, 이 규칙들 어느 것보다 적합도가 크게 나빴다.
+
+**숫자로 보면** (12개 장면의 중앙값, *다른 화소* = 수렴한 지도와 라벨이 다른 화소의 비율):
+
+| 정지 규칙 | 시간 (끝까지 돌린 시간 대비) | 다른 화소 | 가장 나쁜 장면 |
+|---|---|---|---|
+| 원격탐사 기본값 (변경 < 2% 또는 10회) | 5% | 22.6% | 39.8% |
+| 변경 < 5% 또는 10회 | 3% | 28.2% | 46.5% |
+| scikit-learn tol | 24% | 2.4% | 34.4% |
+| scikit-learn `MiniBatchKMeans` 기본값 (군집을 일대일로 짝지은 뒤) | 1.5% | 29.5% | 47.2% |
+| **Markov-K-means 0.4.1** | **57%** | **0.07%** | **0.35%** |
+
+실제 지도는 이렇다. 윗줄은 각 방법이 돌려준 군집 지도로, 화소를 그 군집 중심의 색으로 칠했다. 아랫줄은 실제 영상과, 같은 지도에서 수렴한 지도와 라벨이 같은 화소는 회색조로 두고 다른 화소만 빨갛게 칠한 것이다(서울, 화소 3천만 개, 100 m로 줄여 표시).
+
+![서울: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/seoul.jpg)
+
+<details>
+<summary>나머지 11개 장면</summary>
+
+**아이오와** (옥수수·콩 밭): Markov-K-means 0.132%, scikit-learn tol 5.26%, 원격탐사 기본값 25.0%, MiniBatchKMeans 34.6%
+
+![아이오와: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/iowa.jpg)
+
+**센트럴 밸리** (관개 농지): Markov-K-means 0.059%, scikit-learn tol 34.35%, 원격탐사 기본값 39.8%, MiniBatchKMeans 32.2%
+
+![센트럴 밸리: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/central_valley.jpg)
+
+**사하라** (모래·암석 사막): Markov-K-means 0.350%, scikit-learn tol 6.30%, 원격탐사 기본값 21.4%, MiniBatchKMeans 36.0%
+
+![사하라: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/sahara.jpg)
+
+**나일 삼각주** (농지·사막·도시): Markov-K-means 0.008%, scikit-learn tol 2.04%, 원격탐사 기본값 27.6%, MiniBatchKMeans 39.5%
+
+![나일 삼각주: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/nile_delta.jpg)
+
+**네덜란드** (간척지·물·마을): Markov-K-means 0.027%, scikit-learn tol 2.39%, 원격탐사 기본값 14.7%, MiniBatchKMeans 47.2%
+
+![네덜란드: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/netherlands.jpg)
+
+**스위스 알프스** (산·눈·빙하): Markov-K-means 0.029%, scikit-learn tol 1.87%, 원격탐사 기본값 33.0%, MiniBatchKMeans 26.8%
+
+![스위스 알프스: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/swiss_alps.jpg)
+
+**핀란드** (북방림·호수): Markov-K-means 0.178%, scikit-learn tol 2.50%, 원격탐사 기본값 32.1%, MiniBatchKMeans 21.6%
+
+![핀란드: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/finland.jpg)
+
+**갠지스 평원** (소농 경작지): Markov-K-means 0.092%, scikit-learn tol 3.75%, 원격탐사 기본값 23.8%, MiniBatchKMeans 26.8%
+
+![갠지스 평원: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/ganges_plain.jpg)
+
+**호주 중부** (건조 사바나): Markov-K-means 0.201%, scikit-learn tol 5.77%, 원격탐사 기본값 19.2%, MiniBatchKMeans 38.1%
+
+![호주 중부: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/central_australia.jpg)
+
+**순다르반스** (맹그로브·하구): Markov-K-means 0.007%, scikit-learn tol 0.60%, 원격탐사 기본값 7.8%, MiniBatchKMeans 23.7%
+
+![순다르반스: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/sundarbans.jpg)
+
+**아마존** (열대우림·강): Markov-K-means 0.078%, scikit-learn tol 0.53%, 원격탐사 기본값 6.8%, MiniBatchKMeans 16.9%
+
+![아마존: 방법별 군집 지도와, 수렴한 지도와 다른 화소(빨강)](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/sentinel2_maps/amazon.jpg)
+
+</details>
+
+한반도 남부를 모자이크 하나로(타일 20개, 60 m 화소 5,530만 개, k = 256) 군집하면, Markov-K-means는 시간의 52%에서 멈추고 수렴한 지도와 라벨이 다른 화소는 5.8%다(적합도 차이 0.012%). 원격탐사 기본값은 36%, scikit-learn tol은 14%가 다르다. 약 1 km 칸마다 틀린 화소의 비율만큼 빨강을 섞었다.
+
+![한반도 남부: 실제 영상과, 규칙마다 수렴한 지도와 라벨이 다른 곳](https://raw.githubusercontent.com/busimm3318/Markov-K-means/main/docs/figures/fig13_sentinel2_wide_maps.png)
+
+모든 표와 그림: [평가 보고서 9절](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md).
 
 ### 적용 가능한 알고리즘
 
