@@ -479,3 +479,29 @@ def test_long_run_law_closed_form_matches_the_squared_chain():
         Q = 0.5 * (np.eye(len(st)) + C / C.sum(1, keepdims=True))
         ref = np.linalg.matrix_power(Q, 4096)[ix[-1]]
         np.testing.assert_allclose(P[i, :len(st)], ref, atol=1e-9)
+
+
+@pytest.mark.parametrize("algorithm", ["hamerly", "lloyd", "minibatch"])
+def test_engine_movers_record_the_same_history_as_a_label_scan(blobs, algorithm):
+    from markov_kmeans._engines import HamerlyEngine, LloydEngine, MiniBatchEngine
+
+    C0 = datasets.init_random(blobs, 12, seed=6)
+    make = {"hamerly": lambda: HamerlyEngine(blobs, C0), "lloyd": lambda: LloydEngine(blobs, C0),
+            "minibatch": lambda: MiniBatchEngine(blobs, C0, 512, "constant", 1e-3, 0)}[algorithm]
+    e = make()
+    a = _rules.StateMonitor(len(blobs), 12, _rules.StopParams(window=4, min_iter=4), exact=algorithm != "minibatch")
+    b = _rules.StateMonitor(len(blobs), 12, _rules.StopParams(window=4, min_iter=4), exact=algorithm != "minibatch")
+    a.push(e.labels, e.centers)
+    b.push(e.labels, e.centers)
+    for _ in range(12):
+        prev = e.labels.copy()
+        ch = e.step()
+        np.testing.assert_array_equal(e.movers, np.flatnonzero(e.labels != prev))
+        assert ch == len(e.movers)
+        a.push(e.labels, e.centers, ch)
+        b.push(e.labels, e.centers, ch, movers=e.movers)
+        assert a.assess()[2] == b.assess()[2]
+        everyone = np.arange(len(blobs))
+        np.testing.assert_array_equal(a.window(everyone), b.window(everyone))
+        np.testing.assert_array_equal(a.last_change, b.last_change)
+        np.testing.assert_array_equal(a.unstable(), b.unstable())

@@ -217,7 +217,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER, C0=None, checkpoints=CHECKPOI
             fire("sklearn_tol")
         if markov is None:
             t_s = time.perf_counter()
-            mon.push(eng.labels, eng.centers, changed)
+            mon.push(eng.labels, eng.centers, changed, movers=eng.movers)
             stop, regime, state = mon.assess()
             mon_s += time.perf_counter() - t_s
             if stop:

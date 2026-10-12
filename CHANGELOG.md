@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 ### Changed
 * **Faster Markov part.** The label chains' long-run laws and the bookkeeping of the label
@@ -14,11 +14,15 @@
   * Monitor: the labels that changed at each iteration are recorded with the ring buffer,
     so the unstable set and its size come from those few points instead of a pass over all
     n; the cluster sizes are updated from the movers; the net-flow test counts transfers in
-    a k x k table; the recording and window kernels run in parallel. On a Sentinel-2 scene of
-    thirty million pixels (k = 12) the monitor's cost per iteration fell from 140 ms to 59
-    ms, from 18 % to 9 % of the run. Decisions are unchanged (identical traces on that scene
-    and on the ten cached trajectories; outputs bit-identical to 0.3.1 on 108 configurations
-    apart from Markov probabilities that differ by at most 4e-16).
+    a k x k table; the recording and window kernels run in parallel. Decisions are unchanged
+    (identical traces on a Sentinel-2 scene and on the ten cached trajectories; outputs
+    bit-identical to 0.3.1 on 108 configurations apart from Markov probabilities that
+    differ by at most 4e-16).
+  * The engines report which points changed label in each step (collected per chunk inside
+    the parallel assignment pass), so the monitor copies the previous labelling and updates
+    only those points instead of comparing all n labels. With this, the monitor's cost per
+    iteration on the thirty-million-pixel scene is 34 ms instead of 138 ms in 0.4.0, 5 %
+    instead of 18 % of the run.
   * The full settled labelling is built only when the pseudo labelling is rejected, saving
     one n-sized copy at the stop.
 * Before the window has filled (a stop at `t0` or `max_iter` below `window - 1`), points that

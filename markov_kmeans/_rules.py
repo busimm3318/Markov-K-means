@@ -200,6 +200,17 @@ def _record(labels, prev, dst, last_change, t):
 
 
 @njit(cache=True, parallel=True)
+def _apply_movers(labels, prev, dst, last_change, t, movers):
+    """Record a step from the engine's list of movers: copy the previous labels, update the movers."""
+    for i in prange(dst.shape[0]):
+        dst[i] = prev[i]
+    for q in prange(movers.shape[0]):
+        i = movers[q]
+        dst[i] = labels[i]
+        last_change[i] = t
+
+
+@njit(cache=True, parallel=True)
 def _store(labels, dst):
     for i in prange(labels.shape[0]):
         dst[i] = labels[i]
@@ -388,15 +399,23 @@ class StateMonitor:
         self._Sring = np.zeros((W + 1, self.k))    # cluster sizes of the last W+1 labelings
         self._movers = [np.empty(0, dtype=np.int64) for _ in range(W + 1)]   # who changed at each of them
 
-    def push(self, labels, centers, changed=None):
-        """Record iteration t = 0, 1, 2, ... (t = 0 is the initial assignment)."""
+    def push(self, labels, centers, changed=None, movers=None):
+        """Record iteration t = 0, 1, 2, ... (t = 0 is the initial assignment).
+
+        ``movers`` (optional): the ascending indices of the points whose label changed since
+        the previous push, as the engines report them; the labels are then not compared.
+        """
         W = self.params.window
         self.t += 1
         t = self.t
         lab = np.ascontiguousarray(labels)
         if t > 0:
             prev, dst = self.H[(t - 1) % (W + 1)], self.H[t % (W + 1)]
-            movers = _record(lab, prev, dst, self.last_change, t)
+            if movers is None:
+                movers = _record(lab, prev, dst, self.last_change, t)
+            else:
+                movers = np.ascontiguousarray(movers, dtype=np.int64)
+                _apply_movers(lab, prev, dst, self.last_change, t, movers)
             self._movers[t % (W + 1)] = movers
             # cluster sizes, updated from the movers only
             self._Sring[t % (W + 1)] = (self._Sring[(t - 1) % (W + 1)]

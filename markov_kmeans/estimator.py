@@ -291,7 +291,7 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
         while t < self.max_iter:
             changed = engine.step()
             t += 1
-            monitor.push(engine.labels, engine.centers, changed)
+            monitor.push(engine.labels, engine.centers, changed, movers=engine.movers)
             if self.t0 is not None:
                 if changed == 0 and engine.exact:
                     stop_reason = regime = "converged"

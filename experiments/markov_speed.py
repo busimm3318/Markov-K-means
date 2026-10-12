@@ -16,6 +16,7 @@ their decisions can be compared one to one:
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import os
 import subprocess
 import sys
@@ -73,7 +74,10 @@ def lockstep(engine, monitors, max_iter, rule="auto", halt=True):
             if stopped[j] is not None:
                 continue
             t0 = time.perf_counter()
-            m.push(engine.labels, engine.centers, changed)
+            if "movers" in inspect.signature(m.push).parameters:      # the engine tells who moved
+                m.push(engine.labels, engine.centers, changed, movers=engine.movers)
+            else:
+                m.push(engine.labels, engine.centers, changed)
             stop, _, _ = m.assess() if rule == "auto" else (False, None, None)
             secs[j] += time.perf_counter() - t0
             if stop and halt:
