@@ -173,9 +173,108 @@ def run():
     pd.DataFrame([extra]).to_csv(F["runs"], index=False)
 
 
+# ----------------------------------------------------------------------------- report
+
+def report():
+    from matplotlib.colors import LogNorm
+
+    from experiments.analyze_markov_tail import FIG, GRID, INK, INK2, SERIES, SURFACE, _style, fill_report, md, plt
+    from experiments.sentinel2_tail import RULE_KO, RULE_NAMES
+
+    rules = pd.read_csv(F["rules"]).set_index("rule")
+    curve = pd.read_csv(F["curves"])
+    run_ = pd.read_csv(F["runs"]).iloc[0]
+    scenes = pd.read_csv(F["scenes"])
+    maps = np.load(os.path.join(RESULTS, "sentinel2_wide_maps.npz"))
+    plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
+    style = {"envi_2pct_10": (SERIES[1], "s"), "pct5_10": (SERIES[3], "D"), "pct2": (SERIES[4], "v"),
+             "sklearn_tol": (SERIES[2], "^"), "markov_v03": (INK2, "P"), "markov_auto": (SERIES[0], "o")}
+
+    # figure 12: the run and the rules
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5.4))
+    ax = axes[0]
+    ax.plot(curve.t, curve.changed_share.clip(lower=1e-9) * 100, color=INK2, lw=1.2)
+    for rule, (col, mk) in style.items():
+        t_ = int(rules.loc[rule, "iterations"])
+        y = curve[curve.t == t_].changed_share.clip(lower=1e-9).iloc[0] * 100
+        ax.scatter([t_], [y], color=col, marker=mk, s=70, zorder=4, edgecolor=SURFACE, linewidth=1,
+                   label=RULE_NAMES[rule])
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    _style(ax, f"Pixels changing cluster per iteration (k = {int(run_.k)}, {run_.n / 1e6:.0f} million pixels)",
+           "pixels changing cluster (%, log)", "iteration (log)")
+    ax.legend(frameon=False, fontsize=9, labelcolor=INK2, loc="lower left")
+    ax = axes[1]
+    for rule, (col, mk) in style.items():
+        r = rules.loc[rule]
+        ax.scatter([r.time_frac], [max(r.error, 1e-6) * 100], color=col, marker=mk, s=150, edgecolor=INK,
+                   linewidth=1.1, zorder=5, label=RULE_NAMES[rule])
+    ax.set_yscale("log")
+    _style(ax, "Time and error of each stopping rule", "labels differing from the converged run (%, log)",
+           "time / run to convergence")
+    ax.legend(frameon=False, fontsize=9, labelcolor=INK2, loc="upper right")
+    fig.tight_layout()
+    fig.savefig(FIG / "fig12_sentinel2_wide.png", dpi=150)
+    plt.close(fig)
+
+    # figure 13: where the wrong labels are
+    panels = [("rgb", "True colour (60 m mosaic, 20 tiles)"), ("envi_2pct_10", RULE_NAMES["envi_2pct_10"]),
+              ("sklearn_tol", RULE_NAMES["sklearn_tol"]), ("markov_auto", RULE_NAMES["markov_auto"])]
+    fig, axes = plt.subplots(1, 4, figsize=(16, 5.6))
+    norm = LogNorm(vmin=1e-3, vmax=1.0)
+    for ax, (key, title) in zip(axes, panels):
+        if key == "rgb":
+            img = np.clip(maps["rgb"] / np.nanpercentile(maps["rgb"], 98), 0, 1)
+            ax.imshow(img)
+        else:
+            share = np.where(maps["valid"] > 0, maps[key], np.nan)
+            im = ax.imshow(np.where(share > 0, share, np.nan), cmap="magma_r", norm=norm, interpolation="nearest")
+            ax.imshow(np.where(np.isnan(share), np.nan, np.where(share > 0, np.nan, 0.0)), cmap="Greys", vmin=0, vmax=8,
+                      interpolation="nearest")
+            err = rules.loc[key, "error"]
+            title = f"{title}\nwrong: {err:.2%} of pixels"
+        ax.set_title(title, fontsize=10.5, color=INK, loc="left")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for sp in ax.spines.values():
+            sp.set_color(GRID)
+    cb = fig.colorbar(im, ax=axes[1:], fraction=0.025, pad=0.01)
+    cb.set_label("share of wrong labels in each ~1 km block (blank: none)", color=INK2)
+    fig.savefig(FIG / "fig13_sentinel2_wide_maps.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    T = {}
+    rows = {}
+    for rule in RULES:
+        r = rules.loc[rule]
+        rows[RULE_KO[rule]] = {"정지 반복": int(r.iterations), "시간": r.time_frac, "오차": r.error,
+                               "SSE 초과": r.sse_excess}
+    if "minibatch_s" in run_:
+        rows["scikit-learn MiniBatchKMeans (기본값, 다른 알고리즘)"] = {
+            "정지 반복": f"{int(run_.minibatch_steps):,} 미니배치", "시간": run_.minibatch_time_frac, "오차": np.nan,
+            "SSE 초과": run_.minibatch_sse_excess}
+    T["sentinel2_wide_rules"] = md(pd.DataFrame(rows).T, {"정지 반복": "{}", "시간": "{:.0%}", "오차": "{:.3%}",
+                                                          "SSE 초과": "{:.3%}"}, index_name="정지 규칙")
+    info = {"화소 수 (백만)": run_.n / 1e6, "수렴 반복": int(run_.total_iter),
+            "수렴 여부": "예" if run_.converged else f"상한 {MAX_ITER}",
+            "끝까지 걸린 시간 (분)": run_.total_s / 60, "Markov 정지": f"{int(rules.loc['markov_auto', 'iterations'])} "
+                                                                f"({run_.markov_reason})",
+            "감시기 비용": run_.monitor_s / run_.total_s, "의사 대표점 단계": run_.pseudo_s / run_.total_s,
+            "옮긴 화소": run_.moves_frac, "옮긴 화소 중 맞은 비율": run_.moves_right,
+            "고친 화소": int(run_.fixed), "망친 화소": int(run_.broken),
+            "틀린 화소 중 미결정: 0.3": run_.U_recall, "틀린 화소 중 미결정: 0.4": run_.undecided_recall}
+    T["sentinel2_wide_run"] = md(pd.DataFrame({"값": info}), {"값": "{}"}, index_name="항목")
+    sc = scenes[["tile", "datetime", "cloud_cover", "nodata"]].copy()
+    sc["datetime"] = sc.datetime.str[:10]
+    sc = sc.set_index("tile")
+    sc.columns = ["촬영일", "구름 (%)", "결측 (%)"]
+    T["sentinel2_wide_scenes"] = md(sc, {"촬영일": "{}", "구름 (%)": "{:.2f}", "결측 (%)": "{:.2f}"}, index_name="타일")
+    fill_report(T)
+    for k_, v in T.items():
+        print(f"== {k_}\n{v}")
+    return T
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
-    {"select": select, "run": run}.get(cmd, lambda: None)()
-    if cmd == "report":
-        from experiments.sentinel2_wide_report import report
-        report()
+    {"select": select, "run": run, "report": report}[cmd]()
