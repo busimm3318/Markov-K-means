@@ -1142,6 +1142,34 @@ VQ-VAE·VQGAN 같은 이미지 토크나이저는 인코더 출력 벡터를 가
 
 **정리:** 실제 위성영상에서 Markov-K-means의 쓸모는 **"수렴한 분할이 필요하지만 장면마다 정지 기준을 조정하고 싶지 않을 때"**다. 이 경우 기존의 어떤 단일 설정보다 안정적으로 수렴 결과 근처에서 멈추고, 0.4의 의사 대표점은 같은 정지 시점에서 남은 차이를 다시 3분의 1로 줄인다(중앙값 0.20% → 0.07%, 추가 시간 0.6%). 반대로 대략적인 피복 구분이면 싼 규칙으로 충분하고, 혼합 화소 표시에는 거리 기반 지표가 낫다. 시간 절감은 0.4.1에서 중앙값 43%다.
 
+**장면 지도: 각 방법의 결과와 틀린 화소**
+
+12개 장면을 같은 시드로 다시 군집하고(같은 반복열, 같은 정지 시점), scikit-learn MiniBatchKMeans도 기본값으로 돌려 지도로 그렸다(`experiments/sentinel2_maps.py`, 100 m로 줄여 표시). 장면마다 윗줄은 각 방법의 군집 지도(화소를 그 군집 중심의 색으로)이고, 아랫줄은 실제 영상과, 같은 지도에서 끝까지 수렴한 결과와 라벨이 같은 화소는 회색조로 두고 다른 화소만 빨갛게 칠한 것이다. MiniBatchKMeans는 다른 알고리즘이므로 군집을 수렴 결과와 일대일로 짝지은 뒤(헝가리안 매칭) 비교했다.
+
+![서울: 여섯 방법의 군집 지도와, 수렴 결과와 다른 화소(빨강)](figures/sentinel2_maps/seoul.jpg)
+
+수렴 지도와 라벨이 다른 화소의 비율(장면 이름을 누르면 지도):
+
+| 장면 | Markov-K-means 0.4.1 | scikit-learn tol | 원격탐사 기본값 | 변경 < 5% 또는 10회 | MiniBatchKMeans | MiniBatch SSE 초과 | MiniBatch 단계 |
+|---|---|---|---|---|---|---|---|
+| [Seoul](figures/sentinel2_maps/seoul.jpg) | 0.022% | 0.89% | 14.6% | 19.9% | 20.0% | +5.0% | 179 |
+| [Iowa](figures/sentinel2_maps/iowa.jpg) | 0.132% | 5.26% | 25.0% | 46.5% | 34.6% | +0.4% | 70 |
+| [Central Valley](figures/sentinel2_maps/central_valley.jpg) | 0.059% | 34.35% | 39.8% | 46.0% | 32.2% | +4.8% | 202 |
+| [Sahara](figures/sentinel2_maps/sahara.jpg) | 0.350% | 6.30% | 21.4% | 25.5% | 36.0% | +3.9% | 14 |
+| [Nile Delta](figures/sentinel2_maps/nile_delta.jpg) | 0.008% | 2.04% | 27.6% | 39.2% | 39.5% | +5.8% | 11,214 |
+| [Netherlands](figures/sentinel2_maps/netherlands.jpg) | 0.027% | 2.39% | 14.7% | 15.9% | 47.2% | +10.1% | 13 |
+| [Swiss Alps](figures/sentinel2_maps/swiss_alps.jpg) | 0.029% | 1.87% | 33.0% | 34.9% | 26.8% | +4.6% | 15,598 |
+| [Finland](figures/sentinel2_maps/finland.jpg) | 0.178% | 2.50% | 32.1% | 35.0% | 21.6% | +5.2% | 12 |
+| [Ganges Plain](figures/sentinel2_maps/ganges_plain.jpg) | 0.092% | 3.75% | 23.8% | 31.0% | 26.8% | +4.4% | 1,044 |
+| [Central Australia](figures/sentinel2_maps/central_australia.jpg) | 0.201% | 5.77% | 19.2% | 24.4% | 38.1% | +3.3% | 709 |
+| [Sundarbans](figures/sentinel2_maps/sundarbans.jpg) | 0.007% | 0.60% | 7.8% | 14.8% | 23.7% | +2.0% | 5,700 |
+| [Amazon](figures/sentinel2_maps/amazon.jpg) | 0.078% | 0.53% | 6.8% | 12.3% | 16.9% | +1.9% | 56 |
+| **중앙값** | **0.069%** | 2.44% | 22.6% | 28.2% | 29.5% | +4.5% | 190 |
+
+* Markov-K-means 지도는 12개 장면 모두 수렴 지도와 거의 같다(빨간 점이 드묾). 원격탐사 기본값과 5% 규칙은 장면 전체에 빨간 점이 퍼져 있다.
+* MiniBatchKMeans는 다른 분할에 도달한다. 1만 단계 넘게 돈 장면(나일 삼각주, 스위스 알프스)에서도 27–40%가 달라, 덜 돌아서가 아니라 다른 국소해에 수렴한 것이다. 기본 조기 정지(관성의 지수이동평균이 10번 연속 개선되지 않으면 정지)는 계수가 2×1024/n ≈ 7×10⁻⁵로 작아 첫 미니배치 값에 좌우되고, 정지 시점이 장면마다 12단계에서 15,598단계까지 흩어졌다.
+* scikit-learn 1.9는 미니배치마다 전체 화소의 가중치로 표본을 뽑아(`choice(n, b, p=가중치)`) 3천만 화소에서 한 단계에 약 1초가 걸린다. 가중치가 모두 같으면 균등 추출과 같은 분포이므로, 여기서는 균등 추출(O(b))로 바꿔 돌렸다. 바꾸지 않으면 스위스 알프스 한 장면이 45분 넘게 끝나지 않았다.
+
 ### 9.1 넓은 지역 · 큰 k: 한반도 남부 20개 타일, k = 256
 
 9절의 장면은 타일 하나(110 km)에 k = 12였다. 넓은 지역을 많은 군집으로 나누는 경우를 보려고, 한반도 남부 전체를 한 번에 군집했다(`experiments/sentinel2_wide.py`).
@@ -1434,6 +1462,11 @@ python -m experiments.readme_figures           # README 그림 (작동 도식, �
 python -m experiments.sentinel2_tail select    # 9절 Sentinel-2 장면 선택
 python -m experiments.sentinel2_tail run       # 9절 수렴 꼬리·정지 규칙·60 m 혼합 (장면 12개, 약 1시간)
 python -m experiments.sentinel2_tail report    # 9절 그림·표
+python -m experiments.sentinel2_maps          # 9절 장면 지도 (장면 12개, 약 1시간; --redraw: 저장된 지도로 그림만)
+python -m experiments.sentinel2_wide select    # 9.1절 타일 선택
+python -m experiments.sentinel2_wide run       # 9.1절 한반도 남부 모자이크, k = 256 (약 1.5시간)
+python -m experiments.sentinel2_wide report    # 9.1절 그림·표
+python -m experiments.markov_speed             # 10.1절 Markov 연산 속도 (v0.4.0 태그와 비교)
 ./experiments/run_applications.sh              # 색 양자화, VQ 코드북 (사진 100장 내려받음)
 python -m experiments.analyze_markov_tail      # 1–5절 그림·표
 python -m experiments.analyze_applications     # 6–8절 그림·표
