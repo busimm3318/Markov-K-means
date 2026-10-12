@@ -94,6 +94,8 @@ Twelve Sentinel-2 scenes from very different landscapes, each with about thirty 
 
 The tail is real on satellite images, and the right number of iterations varies so much between scenes that no fixed setting reaches the converged map everywhere. Markov-K-means is the only rule that gets there in every scene without tuning. Almost every pixel still wrong at its stop had not started to move, which is exactly what the pseudo representatives are for: nearly all the pixels they move end where the converged run puts them. The time saved is moderate, because late iterations on low-dimensional imagery are already cheap. The undecided list and soft memberships carry little information here: the scenes settle by drift, and a simple distance ratio flags mixed pixels better.
 
+With many clusters over a whole region (the southern Korean peninsula as one mosaic, a few hundred clusters), the picture changes. Labels keep shifting between nearly identical clusters for thousands of iterations, while the fit has long stopped improving. Every stopping rule then lies on the same time–error curve as a fixed number of iterations. Markov-K-means finds, without tuning, the point where the fit has settled, but it does not reach the converged labels any sooner. scikit-learn's `MiniBatchKMeans` with its defaults stopped far too early there, with a much worse fit than any of these rules.
+
 ### Where it applies
 
 | base algorithm | boundary points | what Markov-K-means adds |
@@ -128,6 +130,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 |---|---|---|
 | Small or easy data | Monitoring and the observation window are pure overhead; the run is slightly slower than plain K-means. | plain K-means |
 | Exact Lloyd with a threshold already tuned for this kind of data | The tuned threshold is slightly cheaper for the same error. | the tuned threshold |
+| Many clusters over a very large area, when the exact converged labels matter | Labels keep shifting between near-identical clusters long after the fit has settled, and no stopping rule reaches the converged labels faster. | run to convergence, or accept the settled fit |
 | Only aggregate quality matters: colour palettes, inertia, compression quality, a rough land-cover map | The aggregate settles long before individual points do, but the rule waits for the points. | fit on a sample, or a short fixed run |
 | Codebooks that jitter strongly, such as EMA VQ codebooks in image tokenizers | The rule rightly never intervenes, so monitoring costs time and saves nothing. | plain training; distance-based soft tokens |
 | You need the exact converged partition | It stops early by design. | run to convergence |
@@ -245,6 +248,8 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 
 위성영상에도 꼬리가 분명히 있고, 알맞은 반복 수가 장면마다 크게 달라서 고정된 설정 하나로는 모든 장면에서 수렴 결과에 닿지 못한다. 조정 없이 모든 장면에서 그곳에 닿는 규칙은 Markov-K-means뿐이다. 멈춘 시점에 아직 틀린 화소는 거의 모두 움직이기 시작하지도 않은 화소였고, 의사 대표점이 바로 그런 화소를 위한 것이다. 의사 대표점이 옮긴 화소는 거의 모두 수렴한 실행이 두는 곳으로 갔다. 저차원 영상에서는 늦은 반복이 원래 싸서 절약되는 시간은 크지 않다. 미결정 목록과 soft 소속도는 여기서 정보가 거의 없다. 장면들이 표류 후 정착하는 체제여서, 혼합 화소는 단순한 거리 비가 더 잘 가려낸다.
 
+넓은 지역 전체를 많은 군집으로 나누면(한반도 남부를 모자이크 하나로, 군집 수백 개) 양상이 달라진다. 적합도가 더 나아지지 않은 지 오래인데도, 거의 같은 군집끼리 라벨을 주고받는 일이 수천 회 이어진다. 이때는 모든 정지 규칙이 고정 반복 수와 같은 시간–오차 곡선 위에 놓인다. Markov-K-means는 조정 없이 적합도가 자리 잡은 지점을 찾지만, 수렴한 라벨에 더 빨리 닿지는 못한다. 같은 데이터에서 scikit-learn `MiniBatchKMeans` 기본값은 너무 일찍 멈춰, 이 규칙들 어느 것보다 적합도가 크게 나빴다.
+
 ### 적용 가능한 알고리즘
 
 | 기반 알고리즘 | 경계 점의 거동 | Markov-K-means가 더하는 것 |
@@ -279,6 +284,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 |---|---|---|
 | 작거나 쉬운 데이터 | 감시와 관찰 창이 순수한 추가 비용이 되어, 그냥 K-means보다 약간 느리다. | 그냥 K-means |
 | 같은 종류의 데이터에 맞춰 임계값을 이미 조정해 둔 exact Lloyd | 같은 오차를 조정된 임계값이 조금 더 싸게 얻는다. | 조정된 임계값 |
+| 아주 넓은 지역을 많은 군집으로 나누면서 수렴한 라벨 그대로가 필요할 때 | 적합도가 자리 잡은 뒤에도 거의 같은 군집끼리 라벨이 오래 오가고, 어떤 정지 규칙도 수렴한 라벨에 더 빨리 닿지 못한다. | 끝까지 수렴, 또는 자리 잡은 적합도로 만족 |
 | 색 팔레트, inertia, 압축 화질, 대략적인 토지피복 지도처럼 전체 품질만 중요할 때 | 집계 지표는 점들보다 훨씬 먼저 안정되는데, 규칙은 점 하나하나를 기다린다. | 표본 학습, 짧은 고정 반복 |
 | 이미지 토크나이저의 EMA VQ 코드북처럼 크게 흔들리는 코드북 | 규칙이 개입하지 않는 것이 옳으므로, 감시 비용만 들고 절감은 없다. | 일반 학습, 거리 기반 soft 토큰 |
 | 정확히 수렴한 분할이 필요할 때 | 설계상 일찍 멈춘다. | 끝까지 수렴 |
