@@ -182,9 +182,45 @@ def fixed_stops(curve):
     return c[["t", "time_frac", "error"]]
 
 
-def report():
-    from matplotlib.colors import LogNorm
+RED = np.array([0.86, 0.06, 0.04])          # wrong labels, as in experiments/sentinel2_maps.py
 
+
+def wrong_map_figure(rules, maps):
+    """Figure 13: true colour, then per rule the mosaic in light grey with red mixed into each ~1 km
+    block in proportion to its share of wrong labels (all wrong: pure red). At this scale a screen
+    pixel covers a block, so this is how a pixel map with the wrong pixels in red looks."""
+    from experiments.analyze_markov_tail import FIG, GRID, INK, SURFACE, plt
+    from experiments.sentinel2_tail import RULE_NAMES
+
+    plt.rcParams.update({"font.family": "DejaVu Sans", "figure.facecolor": SURFACE})
+    on = maps["valid"] > 0
+    rgb = np.clip(maps["rgb"] / np.nanpercentile(maps["rgb"], 98), 0, 1)
+    lum = rgb @ np.array([0.2126, 0.7152, 0.0722])
+    lo, hi = np.percentile(lum[on], [1, 99])
+    grey = 0.62 + 0.3 * np.clip((lum - lo) / max(hi - lo, 1e-6), 0, 1)
+    panels = [("rgb", "True colour (60 m mosaic, 20 tiles)")] + [
+        (r, RULE_NAMES[r]) for r in ("envi_2pct_10", "pct5_10", "sklearn_tol", "markov_auto")]
+    fig, axes = plt.subplots(1, len(panels), figsize=(4.0 * len(panels), 5.6))
+    for ax, (key, title) in zip(axes, panels):
+        if key == "rgb":
+            img = rgb
+        else:
+            s = np.where(on, np.nan_to_num(maps[key]), 0.0)[..., None]
+            img = (1 - s) * grey[..., None] + s * RED
+            img[~on] = 1.0
+            title = f"{title}\nred: wrong, {rules.loc[key, 'error']:.2%} of pixels"
+        ax.imshow(img, interpolation="nearest")
+        ax.set_title(title, fontsize=10.5, color=INK, loc="left")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for sp in ax.spines.values():
+            sp.set_color(GRID)
+    fig.tight_layout()
+    fig.savefig(FIG / "fig13_sentinel2_wide_maps.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def report():
     from experiments.analyze_markov_tail import FIG, GRID, INK, INK2, SERIES, SURFACE, _style, fill_report, md, plt
     from experiments.sentinel2_tail import RULE_KO, RULE_NAMES
 
@@ -230,31 +266,7 @@ def report():
     fig.savefig(FIG / "fig12_sentinel2_wide.png", dpi=150)
     plt.close(fig)
 
-    # figure 13: where the wrong labels are
-    panels = [("rgb", "True colour (60 m mosaic, 20 tiles)"), ("envi_2pct_10", RULE_NAMES["envi_2pct_10"]),
-              ("sklearn_tol", RULE_NAMES["sklearn_tol"]), ("markov_auto", RULE_NAMES["markov_auto"])]
-    fig, axes = plt.subplots(1, 4, figsize=(16, 5.6))
-    norm = LogNorm(vmin=1e-3, vmax=1.0)
-    for ax, (key, title) in zip(axes, panels):
-        if key == "rgb":
-            img = np.clip(maps["rgb"] / np.nanpercentile(maps["rgb"], 98), 0, 1)
-            ax.imshow(img)
-        else:
-            share = np.where(maps["valid"] > 0, maps[key], np.nan)
-            im = ax.imshow(np.where(share > 0, share, np.nan), cmap="magma_r", norm=norm, interpolation="nearest")
-            ax.imshow(np.where(np.isnan(share), np.nan, np.where(share > 0, np.nan, 0.0)), cmap="Greys", vmin=0, vmax=8,
-                      interpolation="nearest")
-            err = rules.loc[key, "error"]
-            title = f"{title}\nwrong: {err:.2%} of pixels"
-        ax.set_title(title, fontsize=10.5, color=INK, loc="left")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for sp in ax.spines.values():
-            sp.set_color(GRID)
-    cb = fig.colorbar(im, ax=axes[1:], fraction=0.025, pad=0.01)
-    cb.set_label("share of wrong labels in each ~1 km block (blank: none)", color=INK2)
-    fig.savefig(FIG / "fig13_sentinel2_wide_maps.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    wrong_map_figure(rules, maps)
 
     T = {}
     rows = {}
