@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+* **Parallel assignment.** The Hamerly and Lloyd assignment passes, the bound updates and
+  the brute-force nearest-center pass run on all cores (numba `prange`). Each point's label
+  and bounds depend on that point alone and the center sums stay serial, so results are
+  identical to the serial kernels and do not depend on the number of threads (checked bit
+  for bit against 0.3.1 on 108 configurations). On one Sentinel-2 tile at 60 m (3.3 million
+  pixels) an iteration is about 3.6 times faster on four cores for k = 256 and k = 1024.
+
 ## 0.4.0
 
 The Markov-K-means algorithm is now one flow: the state monitor stops the run, the

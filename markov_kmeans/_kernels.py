@@ -3,11 +3,15 @@
 Conventions: X is C-contiguous float64 (n, d); nearest-center ties go to the lowest
 index; centers are recomputed from scratch each iteration (no incremental sums), so the
 Lloyd and Hamerly engines produce bit-identical iterates.
+
+The assignment kernels run in parallel over points (each point's label and bounds depend
+on that point alone, so the result does not depend on the number of threads); the center
+sums stay serial so their rounding is the same on every machine.
 """
 from __future__ import annotations
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 _SAFE = 1.0 + 1e-10   # relative margin on Hamerly pruning tests (rounding in bound updates)
 
@@ -75,7 +79,7 @@ def inertia(X, C, labels):
     return s
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def nearest_all(X, C, labels):
     """Brute-force nearest center for every point; returns #labels changed.
 
@@ -84,7 +88,7 @@ def nearest_all(X, C, labels):
     n = X.shape[0]
     k = C.shape[0]
     changed = 0
-    for i in range(n):
+    for i in prange(n):
         best = np.inf
         bj = 0
         for j in range(k):
@@ -115,9 +119,9 @@ def _full_scan(X, i, C):
     return bj, best, second
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _init(X, C, labels, u, l):
-    for i in range(X.shape[0]):
+    for i in prange(X.shape[0]):
         bj, best, second = _full_scan(X, i, C)
         labels[i] = bj
         u[i] = np.sqrt(best)
@@ -138,7 +142,7 @@ def _half_nearest_center(C):
     return s
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _update_bounds(labels, u, l, drift):
     k = drift.shape[0]
     m1 = -1.0
@@ -153,19 +157,19 @@ def _update_bounds(labels, u, l, drift):
             m2 = drift[j]
     if k == 1:
         m2 = 0.0
-    for i in range(labels.shape[0]):
+    for i in prange(labels.shape[0]):
         a = labels[i]
         u[i] += drift[a]
         l[i] -= m2 if a == j1 else m1
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _assign(X, C, labels, u, l, s):
     """One Hamerly assignment pass; returns (#labels changed, #point-center distances)."""
     k = C.shape[0]
     changed = 0
     n_dist = 0
-    for i in range(X.shape[0]):
+    for i in prange(X.shape[0]):
         a = labels[i]
         m = max(s[a], l[i])
         if u[i] * _SAFE < m:

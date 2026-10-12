@@ -408,3 +408,28 @@ def test_sse_change_matches_a_full_recomputation():
     full = inertia(X, compute_centers(X, new, M0)[0], new) - inertia(X, M0, L)
     assert _rules.sse_change(X, L, new, idx, M0, n0) == pytest.approx(full, rel=1e-8)
     assert _rules.sse_change(X, L, L, idx, M0, n0) == 0.0
+
+
+def test_parallel_kernels_do_not_depend_on_the_thread_count(blobs):
+    import numba
+
+    from markov_kmeans._engines import HamerlyEngine, LloydEngine
+
+    C0 = datasets.init_random(blobs, 12, seed=4)
+    out = []
+    for threads in (1, numba.config.NUMBA_NUM_THREADS):
+        numba.set_num_threads(threads)
+        try:
+            h, lo = HamerlyEngine(blobs, C0), LloydEngine(blobs, C0)
+            for _ in range(6):
+                h.step()
+                lo.step()
+            out.append((h.labels.copy(), h.centers.copy(), h.n_dist, lo.labels.copy()))
+        finally:
+            numba.set_num_threads(numba.config.NUMBA_NUM_THREADS)
+    (a, ca, na, la), (b, cb, nb, lb) = out
+    np.testing.assert_array_equal(a, b)
+    np.testing.assert_array_equal(ca, cb)
+    np.testing.assert_array_equal(a, la)
+    np.testing.assert_array_equal(lb, la)
+    assert na == nb
