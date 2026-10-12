@@ -7,9 +7,12 @@ are drawn at 100 m (every fifth 20 m pixel):
     top     the clusters each method returns, every pixel in the colour of its cluster's
             center: converged run, Markov-K-means (default), scikit-learn tol, changed < 2 % or
             10 iterations (ENVI), changed < 5 % or 10 iterations, MiniBatchKMeans
-    bottom  true colour (B04, B03, B02, 2-98 % stretch), then in red the pixels whose label
-            differs from the converged run; MiniBatchKMeans reaches another partition, so its
+    bottom  true colour (B04, B03, B02, 2-98 % stretch), then the share of the pixels of each
+            100 m block whose label differs from the converged run (grey: none; light to dark
+            red: one pixel to all, log scale); MiniBatchKMeans reaches another partition, so its
             clusters are first matched one to one with the converged ones (Hungarian matching)
+
+The downsampled maps are kept in experiments/results/sentinel2_maps/<site>.npz.
 
     python -m experiments.sentinel2_maps     # -> docs/figures/sentinel2_maps/<site>.jpg, sentinel2_maps.csv
 """
@@ -39,13 +42,22 @@ def grid_of(labels, valid, fill=-1):
     return g
 
 
-def dilate(mask, r=1):
-    """Grow isolated pixels so that a single differing pixel stays visible after downsampling."""
-    out = mask.copy()
-    for dy in range(-r, r + 1):
-        for dx in range(-r, r + 1):
-            out |= np.roll(np.roll(mask, dy, 0), dx, 1)
-    return out
+def block_share(mask):
+    """Share of the pixels of each STEP x STEP block where ``mask`` is true (100 m blocks)."""
+    h, w = mask.shape[0] // STEP * STEP, mask.shape[1] // STEP * STEP
+    return mask[:h, :w].reshape(h // STEP, STEP, w // STEP, STEP).mean((1, 3))
+
+
+def share_image(share, v):
+    """Grey where no pixel differs, red from light (one pixel of the block) to dark (all), white off the scene."""
+    from matplotlib import colormaps
+    from matplotlib.colors import LogNorm
+
+    img = np.where(v[..., None], 0.88, 1.0) * np.ones(v.shape + (3,))
+    on = (share > 0) & v
+    shade = 0.35 + 0.65 * LogNorm(vmin=1 / STEP ** 2, vmax=1.0, clip=True)(share[on])
+    img[on] = colormaps["Reds"](shade)[:, :3]
+    return img
 
 
 METHODS = [("full", "Converged (reference)"), ("markov_auto", "Markov-K-means 0.4.1"),
@@ -53,13 +65,15 @@ METHODS = [("full", "Converged (reference)"), ("markov_auto", "Markov-K-means 0.
            ("pct5_10", "Changed < 5 % or 10 it."), ("minibatch", "MiniBatchKMeans (defaults)")]
 
 
-def figure(name, cube, valid, snaps, centers, rules, path, mb=None):
+def figure(name, cube, valid, snaps, centers, rules, path, mb=None, store=None):
     """``centers``: per method, the centers its clusters are coloured with; ``mb``: MiniBatchKMeans summary."""
     from experiments.analyze_markov_tail import INK, INK2, SURFACE, plt
 
     v = valid[::STEP, ::STEP]
     rgb, lo, hi = stretch(cube[::STEP, ::STEP, [2, 1, 0]], v)
     rgb[~v] = 1.0
+    if store is not None:
+        store["rgb"] = (rgb * 255).astype(np.uint8)
     full = grid_of(snaps["full"], valid)
     top, bottom = [], [("True colour", rgb)]
     for key, title in METHODS:
@@ -70,6 +84,9 @@ def figure(name, cube, valid, snaps, centers, rules, path, mb=None):
         gs = g[::STEP, ::STEP]
         img = np.ones(gs.shape + (3,))
         img[gs >= 0] = ccol[gs[gs >= 0]]
+        if store is not None:
+            store[f"clusters_{key}"] = gs.astype(np.int16)
+            store[f"colours_{key}"] = ccol.astype(np.float32)
         if key == "minibatch":
             sub = f"SSE +{mb['sse_excess']:.2%} vs converged"
         elif key == "full":
@@ -80,9 +97,10 @@ def figure(name, cube, valid, snaps, centers, rules, path, mb=None):
         if key == "full":
             continue
         diff = (g != (mb["matched_full"] if key == "minibatch" else full)) & valid
-        d = dilate(diff, 2)[::STEP, ::STEP]
-        dimg = np.where(v[..., None], 0.86, 1.0) * np.ones(v.shape + (3,))
-        dimg[d] = (0.85, 0.12, 0.10)
+        bs = block_share(diff)
+        dimg = share_image(bs, v[:bs.shape[0], :bs.shape[1]])
+        if store is not None:
+            store[f"differs_{key}"] = bs.astype(np.float16)
         share = diff.sum() / valid.sum()
         bottom.append((f"Differs: {title.split(' (')[0] if key != 'envi_2pct_10' else 'ENVI default'}\n"
                        f"{share:.3%} of pixels" + (" (clusters matched)" if key == "minibatch" else ""), dimg))
@@ -123,6 +141,7 @@ def run():
     from markov_kmeans._kernels import compute_centers
 
     os.makedirs(OUT, exist_ok=True)
+    os.makedirs(os.path.join(RESULTS, "sentinel2_maps"), exist_ok=True)
     scenes = pd.read_csv(os.path.join(RESULTS, "sentinel2_scenes.csv"))
     rows = []
     for _, s in scenes.iterrows():
@@ -145,7 +164,9 @@ def run():
         mismatch = float((np.argsort(to_ref)[ref] != snaps["minibatch"]).mean())
         del X
         short = s.site.split(" (")[0].replace(" ", "_").lower()
-        figure(s.site, cube, valid, snaps, centers, rules, os.path.join(OUT, f"{short}.jpg"), mbinfo)
+        store = {}
+        figure(s.site, cube, valid, snaps, centers, rules, os.path.join(OUT, f"{short}.jpg"), mbinfo, store)
+        np.savez_compressed(os.path.join(RESULTS, "sentinel2_maps", f"{short}.npz"), **store)
         rows.append(dict(site=s.site, file=f"{short}.jpg", tile=s["tile"], date=str(s["datetime"])[:10],
                          n=extra["n"], total_iter=extra["total_iter"], markov_iter=int(rules.loc["markov_auto", "iterations"]),
                          markov_error=rules.loc["markov_auto", "error"], envi_error=rules.loc["envi_2pct_10", "error"],
