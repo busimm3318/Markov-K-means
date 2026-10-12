@@ -13,56 +13,71 @@ assigned by the chain's long-run behaviour:
 distribution; for a chain whose last state was absorbing (A A A B B B) it puts all mass
 on that state; for a periodic chain (A B A B) it is the time-average (0.5, 0.5).  It is
 computed as the limit of the lazy chain (I + P)/2, which has the same Cesàro limit but
-is aperiodic, by repeated squaring.
+is aperiodic, by repeated squaring until the powers stop changing. Chains on one or two
+states (most unstable points) use the closed form instead: two communicating states
+a <-> b with move probabilities p (a to b) and q (b to a) have the long-run law
+(q, p) / (p + q); a state with no way out absorbs everything.
 
 A state that occurs only as the final label has no observed outgoing move; it is given
 a self-loop (the point is assumed to stay where it was last seen).
+
+The chains of different points are independent and are computed in parallel.
 """
 from __future__ import annotations
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
+
+
+_CHUNKS = 64
 
 
 @njit(cache=True)
 def _limit_from(P, start, n_square):
+    """Row ``start`` of the limit of the lazy chain (I + P)/2, squaring until it stops changing."""
     s = P.shape[0]
     Q = 0.5 * P
     for a in range(s):
         Q[a, a] += 0.5
     for _ in range(n_square):
-        Q = Q @ Q
+        Q2 = Q @ Q
+        diff = 0.0
         for a in range(s):  # renormalise: rounding in row sums would otherwise double per squaring
             tot = 0.0
             for b in range(s):
-                tot += Q[a, b]
+                tot += Q2[a, b]
             for b in range(s):
-                Q[a, b] /= tot
+                Q2[a, b] /= tot
+                d = abs(Q2[a, b] - Q[a, b])
+                if d > diff:
+                    diff = d
+        Q = Q2
+        if diff <= 1e-15:
+            break
     return Q[start].copy()
 
 
 @njit(cache=True)
-def _one_chain(seq, alpha, prior_rows, n_square, states, counts):
-    """Fill ``states`` (visited labels, -1 padded); return (#states, long-run probs)."""
+def _one_chain(seq, alpha, prior_rows, n_square, states, counts, idx, pi):
+    """Fill ``states`` (visited labels, -1 padded) and ``pi`` (long-run probs); return #states."""
     w = seq.shape[0]
     s = 0
     for t in range(w):
-        found = False
+        found = -1
         for q in range(s):
             if states[q] == seq[t]:
-                found = True
+                found = q
                 break
-        if not found:
+        if found < 0:
             states[s] = seq[t]
+            found = s
             s += 1
+        idx[t] = found
     for q in range(s, states.shape[0]):
         states[q] = -1
-    idx = np.empty(w, dtype=np.int64)
-    for t in range(w):
-        for q in range(s):
-            if states[q] == seq[t]:
-                idx[t] = q
-                break
+    if s == 1:
+        pi[0] = 1.0
+        return 1
     for a in range(s):
         for b in range(s):
             counts[a, b] = alpha
@@ -72,6 +87,18 @@ def _one_chain(seq, alpha, prior_rows, n_square, states, counts):
         for a in range(s):
             for b in range(s):
                 counts[a, b] += prior_rows[states[a], states[b]]
+    if s == 2:
+        r0 = counts[0, 0] + counts[0, 1]
+        r1 = counts[1, 0] + counts[1, 1]
+        p = counts[0, 1] / r0 if r0 > 0.0 else 0.0     # a state without observed moves stays put
+        q = counts[1, 0] / r1 if r1 > 0.0 else 0.0
+        if p + q > 0.0:
+            pi[0] = q / (p + q)
+            pi[1] = p / (p + q)
+        else:
+            pi[0] = 1.0 if idx[w - 1] == 0 else 0.0
+            pi[1] = 1.0 - pi[0]
+        return 2
     P = np.zeros((s, s))
     for a in range(s):
         tot = 0.0
@@ -82,21 +109,30 @@ def _one_chain(seq, alpha, prior_rows, n_square, states, counts):
         else:
             for b in range(s):
                 P[a, b] = counts[a, b] / tot
-    return s, _limit_from(P, idx[w - 1], n_square)
+    lim = _limit_from(P, idx[w - 1], n_square)
+    for q in range(s):
+        pi[q] = lim[q]
+    return s
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _chains(Hw, alpha, prior, n_square):
     w, m = Hw.shape
     S = np.full((m, w), -1, dtype=np.int64)
     Pi = np.zeros((m, w))
-    counts = np.empty((w, w))
-    states = np.empty(w, dtype=np.int64)
-    for i in range(m):
-        s, pi = _one_chain(Hw[:, i], alpha, prior, n_square, states, counts)
-        for q in range(s):
-            S[i, q] = states[q]
-            Pi[i, q] = pi[q]
+    for c in prange(_CHUNKS):
+        counts = np.empty((w, w))
+        states = np.empty(w, dtype=np.int64)
+        idx = np.empty(w, dtype=np.int64)
+        pi = np.empty(w)
+        seq = np.empty(w, dtype=np.int64)
+        for i in range(c * m // _CHUNKS, (c + 1) * m // _CHUNKS):
+            for t in range(w):
+                seq[t] = Hw[t, i]
+            s = _one_chain(seq, alpha, prior, n_square, states, counts, idx, pi)
+            for q in range(s):
+                S[i, q] = states[q]
+                Pi[i, q] = pi[q]
     return S, Pi
 
 
@@ -127,12 +163,12 @@ def pooled_prior(Hw, k, strength=2.0):
     return np.divide(G, tot, out=np.zeros_like(G), where=tot > 0) * strength
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _frequency(Hw):
     w, m = Hw.shape
     S = np.full((m, w), -1, dtype=np.int64)
     F = np.zeros((m, w))
-    for i in range(m):
+    for i in prange(m):
         s = 0
         for t in range(w):
             v = Hw[t, i]

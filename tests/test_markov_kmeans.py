@@ -278,8 +278,8 @@ def test_monitor_kernels_match_numpy():
     last = rng.integers(-1, 4, 5000).astype(np.int32)
     expect_last = last.copy()
     expect_last[lab != prev] = 9
-    moved = _rules._record(lab, prev, dst, last, 9)
-    assert moved == int((lab != prev).sum())
+    movers = _rules._record(lab, prev, dst, last, 9)
+    np.testing.assert_array_equal(movers, np.flatnonzero(lab != prev))
     np.testing.assert_array_equal(dst, lab.astype(np.uint8))
     np.testing.assert_array_equal(last, expect_last)
     np.testing.assert_array_equal(_rules._sizes(dst, 7), np.bincount(dst, minlength=7))
@@ -408,3 +408,100 @@ def test_sse_change_matches_a_full_recomputation():
     full = inertia(X, compute_centers(X, new, M0)[0], new) - inertia(X, M0, L)
     assert _rules.sse_change(X, L, new, idx, M0, n0) == pytest.approx(full, rel=1e-8)
     assert _rules.sse_change(X, L, L, idx, M0, n0) == 0.0
+
+
+def test_parallel_kernels_do_not_depend_on_the_thread_count(blobs):
+    import numba
+
+    from markov_kmeans._engines import HamerlyEngine, LloydEngine
+
+    C0 = datasets.init_random(blobs, 12, seed=4)
+    out = []
+    for threads in (1, numba.config.NUMBA_NUM_THREADS):
+        numba.set_num_threads(threads)
+        try:
+            h, lo = HamerlyEngine(blobs, C0), LloydEngine(blobs, C0)
+            for _ in range(6):
+                h.step()
+                lo.step()
+            out.append((h.labels.copy(), h.centers.copy(), h.n_dist, lo.labels.copy()))
+        finally:
+            numba.set_num_threads(numba.config.NUMBA_NUM_THREADS)
+    (a, ca, na, la), (b, cb, nb, lb) = out
+    np.testing.assert_array_equal(a, b)
+    np.testing.assert_array_equal(ca, cb)
+    np.testing.assert_array_equal(a, la)
+    np.testing.assert_array_equal(lb, la)
+    assert na == nb
+
+
+def test_monitor_unstable_set_from_movers_matches_a_full_scan():
+    rng = np.random.default_rng(3)
+    n, k = 20_000, 9
+    mon = _rules.StateMonitor(n, k, _rules.StopParams(window=4, min_iter=4), exact=False)
+    lab = rng.integers(0, k, n)
+    mon.push(lab, rng.random((k, 2)))
+    for t in range(1, 15):
+        lab = lab.copy()
+        idx = rng.choice(n, rng.integers(0, 3000), replace=False)
+        lab[idx] = rng.integers(0, k, len(idx))
+        mon.push(lab, rng.random((k, 2)))
+        moved = (mon.last_change > t - 4) & (mon.last_change >= 1)     # changed at least once, recently
+        np.testing.assert_array_equal(mon.unstable(), np.flatnonzero(moved))
+        assert mon.unstable_count() == int(moved.sum())
+
+
+def test_net_flow_dense_matches_the_pairwise_count():
+    rng = np.random.default_rng(4)
+    Hw = rng.integers(0, 7, (6, 500))
+    a, b = Hw[:-1].ravel(), Hw[1:].ravel()
+    mv = a != b
+    T = np.zeros((7, 7))
+    np.add.at(T, (a[mv], b[mv]), 1)
+    expect = np.abs(np.triu(T, 1) - np.triu(T.T, 1)).sum() / mv.sum()
+    assert _rules.net_flow(Hw, 7) == pytest.approx(expect, rel=1e-15)
+
+
+def test_long_run_law_closed_form_matches_the_squared_chain():
+    from markov_kmeans import _markov as mk
+
+    rng = np.random.default_rng(5)
+    Hw = rng.integers(0, 3, (11, 3000))
+    Hw[:, :1000] = rng.integers(0, 2, (11, 1000))           # two-state chains (closed form)
+    S, P = mk.stationary(Hw)
+    for i in range(0, 3000, 37):                             # reference: plain matrix powers
+        st = [v for v in dict.fromkeys(Hw[:, i])]
+        ix = [st.index(v) for v in Hw[:, i]]
+        C = np.zeros((len(st), len(st)))
+        for x, y in zip(ix[:-1], ix[1:]):
+            C[x, y] += 1
+        C[C.sum(1) == 0, C.sum(1) == 0] = 1
+        Q = 0.5 * (np.eye(len(st)) + C / C.sum(1, keepdims=True))
+        ref = np.linalg.matrix_power(Q, 4096)[ix[-1]]
+        np.testing.assert_allclose(P[i, :len(st)], ref, atol=1e-9)
+
+
+@pytest.mark.parametrize("algorithm", ["hamerly", "lloyd", "minibatch"])
+def test_engine_movers_record_the_same_history_as_a_label_scan(blobs, algorithm):
+    from markov_kmeans._engines import HamerlyEngine, LloydEngine, MiniBatchEngine
+
+    C0 = datasets.init_random(blobs, 12, seed=6)
+    make = {"hamerly": lambda: HamerlyEngine(blobs, C0), "lloyd": lambda: LloydEngine(blobs, C0),
+            "minibatch": lambda: MiniBatchEngine(blobs, C0, 512, "constant", 1e-3, 0)}[algorithm]
+    e = make()
+    a = _rules.StateMonitor(len(blobs), 12, _rules.StopParams(window=4, min_iter=4), exact=algorithm != "minibatch")
+    b = _rules.StateMonitor(len(blobs), 12, _rules.StopParams(window=4, min_iter=4), exact=algorithm != "minibatch")
+    a.push(e.labels, e.centers)
+    b.push(e.labels, e.centers)
+    for _ in range(12):
+        prev = e.labels.copy()
+        ch = e.step()
+        np.testing.assert_array_equal(e.movers, np.flatnonzero(e.labels != prev))
+        assert ch == len(e.movers)
+        a.push(e.labels, e.centers, ch)
+        b.push(e.labels, e.centers, ch, movers=e.movers)
+        assert a.assess()[2] == b.assess()[2]
+        everyone = np.arange(len(blobs))
+        np.testing.assert_array_equal(a.window(everyone), b.window(everyone))
+        np.testing.assert_array_equal(a.last_change, b.last_change)
+        np.testing.assert_array_equal(a.unstable(), b.unstable())

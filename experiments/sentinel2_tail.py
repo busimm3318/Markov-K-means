@@ -156,7 +156,12 @@ def load(url):
 RULES = ("envi_2pct_10", "pct5_10", "pct2", "sklearn_tol", "markov_v03", "markov_auto", "full")
 
 
-def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
+def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER, C0=None, checkpoints=CHECKPOINTS, keep_snaps=False):
+    """One exact run to convergence with every stopping rule judged on its iterates.
+
+    ``C0`` replaces the k-means++ seeding on X (e.g. seeding on a sample for a large k);
+    ``keep_snaps=True`` also returns each rule's labels and the checkpoints' labels.
+    """
     from sklearn.cluster import kmeans_plusplus
 
     from markov_kmeans import _rules
@@ -165,8 +170,10 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
     from markov_kmeans.estimator import pseudo_finish
 
     n = X.shape[0]
+    lab_t = np.uint8 if k <= 256 else np.uint16
     t_init = time.perf_counter()
-    C0, _ = kmeans_plusplus(X, k, random_state=seed)
+    if C0 is None:
+        C0, _ = kmeans_plusplus(X, k, random_state=seed)
     seed_s = time.perf_counter() - t_init
     t_s = time.perf_counter()
     eng = HamerlyEngine(X, C0)
@@ -192,13 +199,13 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
         shift = float(((eng.centers - C_old) ** 2).sum())
         curve.append(dict(t=t, changed=changed, changed_share=share, shift_rel=shift / tol * 1e-4,
                           step_s=step_s, cum_s=cum))
-        if t in CHECKPOINTS:
-            snaps[t] = eng.labels.astype(np.uint8)
+        if t in checkpoints:
+            snaps[t] = eng.labels.astype(lab_t)
 
         def fire(rule):
             if rule not in fired:
                 fired[rule] = (t, cum)
-                snaps[rule] = eng.labels.astype(np.uint8)
+                snaps[rule] = eng.labels.astype(lab_t)
 
         if share < 0.02 or t >= 10:
             fire("envi_2pct_10")
@@ -210,7 +217,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
             fire("sklearn_tol")
         if markov is None:
             t_s = time.perf_counter()
-            mon.push(eng.labels, eng.centers, changed)
+            mon.push(eng.labels, eng.centers, changed, movers=eng.movers)
             stop, regime, state = mon.assess()
             mon_s += time.perf_counter() - t_s
             if stop:
@@ -239,20 +246,20 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
                                                           state.get("unstable_frac", 1) <= mon.params.unstable_tol
                                                           else {"drift": "stable_drift"}.get(regime, regime)),
                               U=U, U4=U4, moves=moves, accepted=accepted, rho=rho, settle_s=settle_s,
-                              pseudo_s=pseudo_s, mon_s=mon_s, keep=L.astype(np.uint8))
+                              pseudo_s=pseudo_s, mon_s=mon_s, keep=L.astype(lab_t))
                 fired["markov_v03"] = (t, cum + mon_s + settle_s)
-                snaps["markov_v03"] = lab.astype(np.uint8)
+                snaps["markov_v03"] = lab.astype(lab_t)
                 fired["markov_auto"] = (t, cum + mon_s + settle_s + pseudo_s)
-                snaps["markov_auto"] = lab4.astype(np.uint8)
+                snaps["markov_auto"] = lab4.astype(lab_t)
                 del mon      # the monitor is not needed past its decision
         if changed == 0:
             break
     fired["full"] = (t, cum)
-    snaps["full"] = eng.labels.astype(np.uint8)
+    snaps["full"] = eng.labels.astype(lab_t)
     for r in RULES:          # rules that never fired stop where the run stopped
         if r not in fired:
             fired[r] = (t, cum)
-            snaps[r] = eng.labels.astype(np.uint8)
+            snaps[r] = eng.labels.astype(lab_t)
 
     ref = snaps["full"]
     C_ref = compute_centers(X, ref.astype(np.int64), eng.centers)[0]
@@ -289,7 +296,9 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER):
                      undecided_precision=float(wrong4[in4].mean()) if in4.any() else np.nan,
                      rho_median=float(np.median(markov["rho"])))
     extra.update(n=n, k=k, converged=bool(curve[-1]["changed"] == 0), total_iter=t, total_s=cum, seed_s=seed_s,
-                 assign0_s=assign0_s)
+                 assign0_s=assign0_s, sse_ref=float(sse_ref))
+    if keep_snaps:
+        return pd.DataFrame(rows), pd.DataFrame(curve), extra, snaps
     return pd.DataFrame(rows), pd.DataFrame(curve), extra
 
 

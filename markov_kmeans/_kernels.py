@@ -3,13 +3,19 @@
 Conventions: X is C-contiguous float64 (n, d); nearest-center ties go to the lowest
 index; centers are recomputed from scratch each iteration (no incremental sums), so the
 Lloyd and Hamerly engines produce bit-identical iterates.
+
+The assignment kernels run in parallel over points (each point's label and bounds depend
+on that point alone, so the result does not depend on the number of threads); the center
+sums stay serial so their rounding is the same on every machine.
 """
 from __future__ import annotations
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 _SAFE = 1.0 + 1e-10   # relative margin on Hamerly pruning tests (rounding in bound updates)
+_CHUNKS = 256         # work units of the assignment passes that report movers
+_STRIDE = 16          # prange order -> chunk: interleaved, so each thread gets chunks from all over the data
 
 
 def as_data(X) -> np.ndarray:
@@ -75,7 +81,7 @@ def inertia(X, C, labels):
     return s
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def nearest_all(X, C, labels):
     """Brute-force nearest center for every point; returns #labels changed.
 
@@ -84,7 +90,7 @@ def nearest_all(X, C, labels):
     n = X.shape[0]
     k = C.shape[0]
     changed = 0
-    for i in range(n):
+    for i in prange(n):
         best = np.inf
         bj = 0
         for j in range(k):
@@ -96,6 +102,45 @@ def nearest_all(X, C, labels):
             changed += 1
             labels[i] = bj
     return changed
+
+
+@njit(cache=True, parallel=True)
+def _compact(buf, cnt, n):
+    """Concatenate the per-chunk mover segments buf[lo_c : lo_c + cnt[c]] (ascending indices)."""
+    off = np.zeros(_CHUNKS + 1, dtype=np.int64)
+    for c in range(_CHUNKS):
+        off[c + 1] = off[c] + cnt[c]
+    out = np.empty(off[_CHUNKS], dtype=np.int64)
+    for c in prange(_CHUNKS):
+        lo = c * n // _CHUNKS
+        for q in range(cnt[c]):
+            out[off[c] + q] = buf[lo + q]
+    return out
+
+
+@njit(cache=True, parallel=True)
+def nearest_movers(X, C, labels, buf, cnt):
+    """``nearest_all`` that also records which points changed label (see ``_compact``)."""
+    n = X.shape[0]
+    k = C.shape[0]
+    for cc in prange(_CHUNKS):
+        c = (cc % _STRIDE) * (_CHUNKS // _STRIDE) + cc // _STRIDE
+        lo, hi = c * n // _CHUNKS, (c + 1) * n // _CHUNKS
+        m = 0
+        for i in range(lo, hi):
+            best = np.inf
+            bj = 0
+            for j in range(k):
+                s = sqdist(X, i, C, j)
+                if s < best:
+                    best = s
+                    bj = j
+            if bj != labels[i]:
+                labels[i] = bj
+                buf[lo + m] = i
+                m += 1
+        cnt[c] = m
+    return _compact(buf, cnt, n)
 
 
 @njit(cache=True)
@@ -115,9 +160,9 @@ def _full_scan(X, i, C):
     return bj, best, second
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _init(X, C, labels, u, l):
-    for i in range(X.shape[0]):
+    for i in prange(X.shape[0]):
         bj, best, second = _full_scan(X, i, C)
         labels[i] = bj
         u[i] = np.sqrt(best)
@@ -138,7 +183,7 @@ def _half_nearest_center(C):
     return s
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _update_bounds(labels, u, l, drift):
     k = drift.shape[0]
     m1 = -1.0
@@ -153,19 +198,19 @@ def _update_bounds(labels, u, l, drift):
             m2 = drift[j]
     if k == 1:
         m2 = 0.0
-    for i in range(labels.shape[0]):
+    for i in prange(labels.shape[0]):
         a = labels[i]
         u[i] += drift[a]
         l[i] -= m2 if a == j1 else m1
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def _assign(X, C, labels, u, l, s):
     """One Hamerly assignment pass; returns (#labels changed, #point-center distances)."""
     k = C.shape[0]
     changed = 0
     n_dist = 0
-    for i in range(X.shape[0]):
+    for i in prange(X.shape[0]):
         a = labels[i]
         m = max(s[a], l[i])
         if u[i] * _SAFE < m:
@@ -182,6 +227,41 @@ def _assign(X, C, labels, u, l, s):
             labels[i] = bj
             changed += 1
     return changed, n_dist
+
+
+@njit(cache=True, parallel=True)
+def _assign_movers(X, C, labels, u, l, s, buf, cnt, nd_c):
+    """``_assign`` that also records which points changed label; returns #distances."""
+    n = X.shape[0]
+    k = C.shape[0]
+    for cc in prange(_CHUNKS):
+        c = (cc % _STRIDE) * (_CHUNKS // _STRIDE) + cc // _STRIDE
+        lo, hi = c * n // _CHUNKS, (c + 1) * n // _CHUNKS
+        m = 0
+        nd = 0
+        for i in range(lo, hi):
+            a = labels[i]
+            mm = max(s[a], l[i])
+            if u[i] * _SAFE < mm:
+                continue
+            u[i] = np.sqrt(sqdist(X, i, C, a))
+            nd += 1
+            if u[i] * _SAFE < mm:
+                continue
+            bj, best, second = _full_scan(X, i, C)
+            nd += k
+            u[i] = np.sqrt(best)
+            l[i] = np.sqrt(second)
+            if bj != a:
+                labels[i] = bj
+                buf[lo + m] = i
+                m += 1
+        cnt[c] = m
+        nd_c[c] = nd
+    total = 0
+    for c in range(_CHUNKS):
+        total += nd_c[c]
+    return total
 
 
 @njit(cache=True)

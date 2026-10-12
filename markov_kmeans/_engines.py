@@ -5,13 +5,20 @@ those labels were computed against), ``n_dist`` (point-center distance evaluatio
 far), ``step() -> int`` (one iteration; returns the number of labels that changed) and
 ``nearest(C, inplace=False) -> (labels, n_dist)`` (nearest of the centers C for every
 point; ``inplace=True`` reuses the engine's arrays, after which it must not step again).
+After each step ``movers`` holds the indices (ascending) of the points whose label changed,
+so the monitor can record the step without comparing all n labels.
 """
 from __future__ import annotations
 
 import numpy as np
 
-from ._kernels import (_assign, _half_nearest_center, _init, _sculley_update, _update_bounds,
-                       center_drift, compute_centers, nearest_all)
+from ._kernels import (_CHUNKS, _assign, _assign_movers, _compact, _half_nearest_center, _init, _sculley_update,
+                       _update_bounds, center_drift, compute_centers, nearest_all, nearest_movers)
+
+
+def _mover_buffers(n):
+    """Scratch for the movers of one pass: each chunk writes its own index range of ``buf``."""
+    return np.empty(n, dtype=np.int32 if n < 2 ** 31 else np.int64), np.zeros(_CHUNKS, dtype=np.int64)
 
 
 class _BruteNearest:
@@ -34,12 +41,14 @@ class LloydEngine(_BruteNearest):
         self.labels = np.full(n, -1, dtype=np.int64)
         nearest_all(X, self.centers, self.labels)
         self.n_dist = n * k
+        self._buf, self._cnt = _mover_buffers(n)
+        self.movers = np.empty(0, dtype=np.int64)
 
     def step(self):
         self.centers, _ = compute_centers(self.X, self.labels, self.centers)
-        changed = nearest_all(self.X, self.centers, self.labels)
+        self.movers = nearest_movers(self.X, self.centers, self.labels, self._buf, self._cnt)
         self.n_dist += self.X.shape[0] * self.centers.shape[0]
-        return int(changed)
+        return len(self.movers)
 
 
 class HamerlyEngine:
@@ -56,6 +65,9 @@ class HamerlyEngine:
         self.l = np.empty(n)
         _init(X, self.centers, self.labels, self.u, self.l)
         self.n_dist = n * k
+        self._buf, self._cnt = _mover_buffers(n)
+        self._nd = np.zeros(_CHUNKS, dtype=np.int64)
+        self.movers = np.empty(0, dtype=np.int64)
 
     def step(self):
         new_C, _ = compute_centers(self.X, self.labels, self.centers)
@@ -63,9 +75,10 @@ class HamerlyEngine:
         self.centers = new_C
         s = _half_nearest_center(new_C)
         _update_bounds(self.labels, self.u, self.l, drift)
-        changed, nd = _assign(self.X, new_C, self.labels, self.u, self.l, s)
+        nd = _assign_movers(self.X, new_C, self.labels, self.u, self.l, s, self._buf, self._cnt, self._nd)
+        self.movers = _compact(self._buf, self._cnt, self.X.shape[0])
         self.n_dist += int(nd)
-        return int(changed)
+        return len(self.movers)
 
     def nearest(self, C, inplace=False):
         """Nearest of C, pruned by the current bounds moved by |C - centers| (as a step)."""
@@ -99,6 +112,7 @@ class MiniBatchEngine(_BruteNearest):
             idx = np.arange(s, min(n, s + (1 << 16)))
             self.labels[idx] = self._nearest(idx)
         self.n_dist = n * k
+        self.movers = np.empty(0, dtype=np.int64)
 
     def _nearest(self, idx):
         C = self.centers
@@ -117,4 +131,5 @@ class MiniBatchEngine(_BruteNearest):
             self.labels[idx] = lab
             _sculley_update(self.X[idx], lab, self.centers, self.counts, self.eta)
         self.n_dist += self.X.shape[0] * self.centers.shape[0]
-        return int((self.labels != prev).sum())
+        self.movers = np.flatnonzero(self.labels != prev)
+        return len(self.movers)

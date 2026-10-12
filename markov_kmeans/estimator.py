@@ -23,23 +23,30 @@ _REPRESENTATIVES = ("markov", "current")
 _CENTER_UPDATES = ("auto", "hard", "soft", "pseudo", "none")
 
 
-def pseudo_finish(X, engine, monitor, L, labels, U, S, P, oscillating, rho_max=0.95, inplace=False):
+def pseudo_finish(X, engine, monitor, L, labels, U, S, P, oscillating, rho_max=0.95, inplace=False, labels_U=None):
     """Center chains -> pseudo representatives -> assignment, kept if it does not raise the SSE.
 
     ``L`` are the engine's labels at the stop and ``(labels, U, S, P, oscillating)`` the
-    history settlement. Returns ``(labels, U, S, P, oscillating, pseudo_centers, rho, moves,
-    accepted, n_dist)``: when the pseudo labelling is rejected the settlement comes back
-    unchanged, with no moves. ``inplace=True`` lets the engine reuse its own arrays (it is
-    done once the run has stopped), which saves copying them on large data.
+    history settlement; ``labels`` may be None with ``labels_U`` the settled labels of U, in
+    which case the full settled labelling is only built if it is needed. Returns ``(labels,
+    U, S, P, oscillating, pseudo_centers, rho, moves, accepted, n_dist)``: when the pseudo
+    labelling is rejected the settlement comes back unchanged, with no moves.
+    ``inplace=True`` lets the engine reuse its own arrays (it is done once the run has
+    stopped), which saves copying them on large data.
     """
+    if labels_U is None:
+        labels_U = labels[U]
     C = engine.centers
     Cs, rho = _rules.long_run_centers(monitor.centers_window(), rho_max)
     pseudo, n_dist = engine.nearest(Cs, inplace=inplace)
     moves = np.flatnonzero(pseudo != L)
     M0, n0 = compute_centers(X, L, C)
-    accepted = (_rules.sse_change(X, L, pseudo, moves, M0, n0)
-                <= _rules.sse_change(X, L, labels, U, M0, n0))
+    accepted = (_rules.sse_change_at(X, moves, L[moves], pseudo[moves], M0, n0)
+                <= _rules.sse_change_at(X, U, L[U], labels_U, M0, n0))
     if not accepted:
+        if labels is None:
+            labels = L.copy()
+            labels[U] = labels_U
         return labels, U, S, P, oscillating, Cs, rho, moves[:0], False, n_dist
     frac = _rules.crossing_fraction(X[moves], L[moves], pseudo[moves], C, Cs)
     U, S, P, oscillating = _rules.undecided(U, S, P, oscillating, moves, frac, pseudo, L)
@@ -284,7 +291,7 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
         while t < self.max_iter:
             changed = engine.step()
             t += 1
-            monitor.push(engine.labels, engine.centers, changed)
+            monitor.push(engine.labels, engine.centers, changed, movers=engine.movers)
             if self.t0 is not None:
                 if changed == 0 and engine.exact:
                     stop_reason = regime = "converged"
@@ -314,21 +321,23 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
             if regime == "running":   # stopped by t0 or max_iter: classify from the window
                 share = float((_rules.switches(Hw) >= 2).mean()) if len(U) else 0.0
                 regime = "oscillation" if share >= self.osc_share else "drift"
-            labels = L.copy()
             labels_U, S, P, oscillating = _rules.settle(
                 Hw, L[U], rule=self.assign_rule, alpha=self.alpha, pooled_prior=self.pooled_prior,
                 n_clusters=k, oscillation_rule=self.oscillation_rule, regime=regime)
-            labels[U] = labels_U
+            labels = None               # the full settled labelling is built only if it is used
 
         Cs, rho = C.copy(), np.zeros(k)
         moves = np.empty(0, dtype=np.int64)
         accepted, n_extra = False, 0
-        if stop_reason != "converged" and monitor.t >= 2 and W >= 2:
-            if self.representatives == "markov":
-                labels, U, S, P, oscillating, Cs, rho, moves, accepted, n_extra = pseudo_finish(
-                    X, engine, monitor, L, labels, U, S, P, oscillating, self.rho_max, inplace=True)
-            else:
-                Cs, rho = _rules.long_run_centers(monitor.centers_window(), self.rho_max)
+        pseudo_step = stop_reason != "converged" and monitor.t >= 2 and W >= 2
+        if pseudo_step and self.representatives == "markov":
+            labels, U, S, P, oscillating, Cs, rho, moves, accepted, n_extra = pseudo_finish(
+                X, engine, monitor, L, labels, U, S, P, oscillating, self.rho_max, inplace=True, labels_U=labels_U)
+        elif pseudo_step:
+            Cs, rho = _rules.long_run_centers(monitor.centers_window(), self.rho_max)
+        if labels is None:
+            labels = L.copy()
+            labels[U] = labels_U
 
         mode = self.center_update
         if mode == "auto":

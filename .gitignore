@@ -15,3 +15,5 @@ build/
 experiments/results/auto_rule*.csv
 experiments/results/color_quant*.csv
 experiments/results/vq_codebook*.csv
+# downsampled scene maps (about 9 MB a scene); regenerate with python -m experiments.sentinel2_maps
+experiments/results/sentinel2_maps/

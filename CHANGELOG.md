@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.1
+
+### Changed
+* **Faster Markov part.** The label chains' long-run laws and the bookkeeping of the label
+  histories cost far less:
+  * Long-run law of a label chain: chains on one or two states (most unstable points) use the
+    closed form (q, p) / (p + q); longer chains square the lazy chain only until its powers
+    stop changing instead of a fixed 40 times; the points are processed in parallel. On the
+    760,000 unstable pixels of a constant-step run on a Sentinel-2 scene: 7.0 s -> 0.6 s
+    (9.1 -> 0.8 microseconds per point); probabilities agree with 0.4.0 to within 1e-15 and
+    the labels are identical.
+  * Monitor: the labels that changed at each iteration are recorded with the ring buffer,
+    so the unstable set and its size come from those few points instead of a pass over all
+    n; the cluster sizes are updated from the movers; the net-flow test counts transfers in
+    a k x k table; the recording and window kernels run in parallel. Decisions are unchanged
+    (identical traces on a Sentinel-2 scene and on the ten cached trajectories; outputs
+    bit-identical to 0.3.1 on 108 configurations apart from Markov probabilities that
+    differ by at most 4e-16).
+  * The engines report which points changed label in each step (collected per chunk inside
+    the parallel assignment pass), so the monitor copies the previous labelling and updates
+    only those points instead of comparing all n labels. With this, the monitor's cost per
+    iteration on the thirty-million-pixel scene is 34 ms instead of 138 ms in 0.4.0, 5 %
+    instead of 18 % of the run.
+  * The full settled labelling is built only when the pseudo labelling is rejected, saving
+    one n-sized copy at the stop.
+* Before the window has filled (a stop at `t0` or `max_iter` below `window - 1`), points that
+  never changed cluster are no longer counted as unstable.
+* **Parallel assignment.** The Hamerly and Lloyd assignment passes, the bound updates and
+  the brute-force nearest-center pass run on all cores (numba `prange`). Each point's label
+  and bounds depend on that point alone and the center sums stay serial, so results are
+  identical to the serial kernels and do not depend on the number of threads (checked bit
+  for bit against 0.3.1 on 108 configurations). On one Sentinel-2 tile at 60 m (3.3 million
+  pixels) an iteration is about 3.6 times faster on four cores for k = 256 and k = 1024.
+
 ## 0.4.0
 
 The Markov-K-means algorithm is now one flow: the state monitor stops the run, the
