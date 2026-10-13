@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+import warnings
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassNamePrefixFeaturesOutMixin, ClusterMixin, TransformerMixin
@@ -113,9 +114,20 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
     init : {"k-means++", "random"} or array of shape (n_clusters, n_features)
     t0 : int or None
         Fixed stopping iteration (overrides ``stop_rule``).
-    stop_rule : {"auto", "unstable"}
-        "unstable" only uses ``unstable_tol`` (the 0.1.0 behaviour).
-    assign_rule : {"auto", "markov", "frequency", "keep"}
+    stop_rule : {"auto", "monitor", "unstable"}
+        "monitor" judges movement, representatives and partitions as above. "unstable" stops
+        only when U is at most ``unstable_tol`` of the data: in effect a threshold on the
+        share of points that changed within the window; it needs no label history. "auto" is
+        "monitor" in 0.5. From 0.6 it will be "unstable" on exact engines (Hamerly, Lloyd),
+        where the extra tests rarely stop earlier and can stop too early; a FutureWarning is
+        raised when that change would alter a run.
+    assign_rule : {"auto", "oscillation", "history", "markov", "frequency", "keep"}
+        "history" is the history settlement described above. "oscillation" uses label
+        histories only when the run oscillates and keeps the current labels in a drift, where
+        settling from the history gains nothing; combined with ``stop_rule="unstable"`` on an
+        exact engine the run then keeps no label history at all (less memory, a cheaper
+        monitor). "auto" is "history" in 0.5 and will be "oscillation" from 0.6; a
+        FutureWarning is raised when that change would alter a run.
     unstable_tol, max_unstable, osc_share, plateau_ratio, change_tol : float
         Movement thresholds of the stop rule.
     center_tol, center_noise_tol, travel_ratio : float
@@ -132,7 +144,8 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
     alpha, pooled_prior : float
         Markov rule only: Dirichlet smoothing and pooled-prior strength.
     oscillation_rule : {"frequency", "markov"}
-        How ``assign_rule="auto"`` settles oscillating points.
+        How oscillating points are settled: their window occupancy, or the long-run law of
+        their label Markov chain. With the defaults no transition matrix is ever built.
     representatives : {"markov", "current"}
         "markov" finishes the run from the pseudo representatives (the long-run means of the
         center chains); "current" settles U against the current centers only (the 0.3
@@ -284,7 +297,12 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
             flow_tol=self.flow_tol)
         seed = self._seed()
         engine = self._engine(X, self._initial_centers(X, seed), seed)
-        monitor = _rules.StateMonitor(n, k, params, exact=engine.exact, rule=self.stop_rule)
+        stop_rule = "monitor" if self.stop_rule == "auto" else self.stop_rule       # 0.5 meanings
+        assign_rule = "history" if self.assign_rule == "auto" else self.assign_rule
+        # Without history settlement a drifting exact run needs no label window at all.
+        history = not (engine.exact and stop_rule == "unstable" and self.t0 is None
+                       and assign_rule in ("oscillation", "keep"))
+        monitor = _rules.StateMonitor(n, k, params, exact=engine.exact, rule=stop_rule, history=history)
         monitor.push(engine.labels, engine.centers)
 
         t, stop_reason, regime = 0, "max_iter", "running"
@@ -317,14 +335,24 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
             labels = L
         else:
             U = monitor.unstable().astype(np.int64)
-            Hw = monitor.window(U)
+            Hw = monitor.window(U) if history else None
+            n_sw = _rules.switches(Hw) if history else monitor.switch_counts(U)
             if regime == "running":   # stopped by t0 or max_iter: classify from the window
-                share = float((_rules.switches(Hw) >= 2).mean()) if len(U) else 0.0
+                share = float((n_sw >= 2).mean()) if len(U) else 0.0
                 regime = "oscillation" if share >= self.osc_share else "drift"
+            rule = assign_rule
+            if Hw is None and regime == "oscillation":
+                warnings.warn("the run ended oscillating but kept no label history "
+                              '(stop_rule="unstable" with assign_rule="oscillation"); '
+                              "the unstable points keep their current labels", UserWarning, stacklevel=2)
+                rule = "keep"
             labels_U, S, P, oscillating = _rules.settle(
-                Hw, L[U], rule=self.assign_rule, alpha=self.alpha, pooled_prior=self.pooled_prior,
-                n_clusters=k, oscillation_rule=self.oscillation_rule, regime=regime)
+                Hw, L[U], rule=rule, alpha=self.alpha, pooled_prior=self.pooled_prior,
+                n_clusters=k, oscillation_rule=self.oscillation_rule, regime=regime,
+                n_switches=n_sw, width=W + 1)
             labels = None               # the full settled labelling is built only if it is used
+
+        self._warn_defaults(engine.exact, stop_reason, regime, oscillating)
 
         Cs, rho = C.copy(), np.zeros(k)
         moves = np.empty(0, dtype=np.int64)
@@ -377,6 +405,24 @@ class MarkovKMeans(ClassNamePrefixFeaturesOutMixin, TransformerMixin, ClusterMix
         self._membership = None
         self.fit_seconds_ = time.perf_counter() - t_start
         return self
+
+    def _warn_defaults(self, exact, stop_reason, regime, oscillating):
+        """FutureWarning when the 0.6 meanings of stop_rule / assign_rule = "auto" would alter this run."""
+        if self.t0 is not None:
+            return
+        if self.stop_rule == "auto" and exact and stop_reason in ("stable_drift", "oscillation"):
+            warnings.warn(
+                f'stop_rule="auto" stopped this run by the {stop_reason!r} test. From 0.6, "auto" on exact '
+                'engines stops only on the share of recently changed points (stop_rule="unstable") and '
+                'would run longer here. Set stop_rule="monitor" to keep the current behaviour or '
+                '"unstable" to adopt the new one.', FutureWarning, stacklevel=3)
+        if self.assign_rule == "auto" and regime == "drift" and bool(np.any(oscillating)):
+            warnings.warn(
+                f'assign_rule="auto" settled {int(np.sum(oscillating))} oscillating points of a drifting run '
+                'from their label histories. From 0.6, "auto" uses label histories only when the run '
+                'oscillates (assign_rule="oscillation") and would keep their current labels. Set '
+                'assign_rule="history" to keep the current behaviour or "oscillation" to adopt the new one.',
+                FutureWarning, stacklevel=3)
 
     # ------------------------------------------------------------------ outputs
 

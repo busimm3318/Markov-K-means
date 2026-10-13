@@ -34,7 +34,7 @@ Partitions — how stable the clusters are
     (``net_flow <= flow_tol``): no cluster is being reorganised, points only move across
     boundaries back and forth
 
-Decision (``rule="auto"``)
+Decision (``rule="monitor"``; ``"auto"`` is the same in 0.5)
     converged            no label changed (exact engines) -> stop, nothing to settle
     drift (tail)         unstable_frac <= unstable_tol -> stop and settle
     intervene            unstable_frac <= max_unstable, representatives and partitions stable,
@@ -42,7 +42,9 @@ Decision (``rule="auto"``)
                          osc_share and change counts no longer fall) -> regime "oscillation",
                          or the projected remaining changes <= change_tol -> regime "drift"
     otherwise            keep iterating
-``rule="unstable"`` keeps only the converged / unstable_tol tests (the 0.1.0 behaviour).
+``rule="unstable"`` keeps only the converged / unstable_tol tests: in effect a threshold on the
+share of points that changed within the window. It needs no label history, so the monitor can
+run without one (``history=False``). From 0.6, ``"auto"`` means ``"unstable"`` on exact engines.
 
 Pseudo representatives (``long_run_centers``)
     Each center's path over the window is read as a Markov chain on positions, the AR(1)
@@ -52,7 +54,8 @@ Pseudo representatives (``long_run_centers``)
     point is then assigned to the nearest pseudo representative, which moves points that
     are about to cross a boundary before the run gets there.
 
-Settlement (``settle``, ``rule="auto"``) depends on the regime the monitor diagnosed:
+Settlement (``settle``) depends on the regime the monitor diagnosed. ``rule="history"`` (what
+``"auto"`` means in 0.5):
 
 * oscillation — the remaining points keep moving between clusters, so every unstable point
   is settled by its window occupancy (soft: the occupancy, e.g. [0.5, 0.5]);
@@ -60,6 +63,11 @@ Settlement (``settle``, ``rule="auto"``) depends on the regime the monitor diagn
   label; a point that switched twice or more is settled by its window occupancy
   (``oscillation_rule="frequency"``) or by the long-run law of its label Markov chain
   (``"markov"``).
+
+``rule="oscillation"`` (what ``"auto"`` means from 0.6) uses label histories only when the run
+oscillates: in a drifting run every unstable point keeps its current label. Settling from the
+history gains nothing in drift (an exact run's last moves are mostly right), so a drifting
+exact run needs no label history at all.
 """
 from __future__ import annotations
 
@@ -70,8 +78,8 @@ from numba import njit, prange
 
 from . import _markov as _mk
 
-STOP_RULES = ("auto", "unstable")
-ASSIGN_RULES = ("auto", "markov", "frequency", "keep")
+STOP_RULES = ("auto", "monitor", "unstable")
+ASSIGN_RULES = ("auto", "oscillation", "history", "markov", "frequency", "keep")
 
 
 @dataclass(frozen=True)
@@ -384,11 +392,15 @@ class StateMonitor:
     params: StopParams = field(default_factory=StopParams)
     exact: bool = True
     rule: str = "auto"
+    history: bool = True      # keep the last W+1 labelings (needed by every rule but "unstable")
 
     def __post_init__(self):
         W = self.params.window
+        if not self.history and self.rule != "unstable":
+            raise ValueError('a monitor without label history supports rule="unstable" only')
         dtype = np.uint8 if self.k <= 255 else (np.uint16 if self.k <= 65535 else np.int32)
-        self.H = np.empty((W + 1, self.n), dtype=dtype)   # ring buffer of the last W+1 labelings
+        # ring buffer of the last W+1 labelings
+        self.H = np.empty((W + 1, self.n), dtype=dtype) if self.history else None
         self.last_change = np.full(self.n, -1, dtype=np.int32)
         self.counts = []
         self.drift = []
@@ -396,7 +408,7 @@ class StateMonitor:
         self.t = -1
         self._C = None
         self._Cring = None    # centers of the last W+1 iterations
-        self._Sring = np.zeros((W + 1, self.k))    # cluster sizes of the last W+1 labelings
+        self._Sring = np.zeros((W + 1, self.k)) if self.history else None   # cluster sizes, same labelings
         self._movers = [np.empty(0, dtype=np.int64) for _ in range(W + 1)]   # who changed at each of them
 
     def push(self, labels, centers, changed=None, movers=None):
@@ -409,7 +421,16 @@ class StateMonitor:
         self.t += 1
         t = self.t
         lab = np.ascontiguousarray(labels)
-        if t > 0:
+        if t > 0 and not self.history:
+            if movers is None:
+                raise ValueError("a monitor without label history needs the movers")
+            movers = np.ascontiguousarray(movers, dtype=np.int64)
+            self.last_change[movers] = t
+            self._movers[t % (W + 1)] = movers
+            self.counts.append(len(movers) if changed is None else int(changed))
+            step = np.sqrt(((centers - self._C) ** 2).sum(1))
+            self.drift.append(float((step / _half_nearest(centers)).max()))
+        elif t > 0:
             prev, dst = self.H[(t - 1) % (W + 1)], self.H[t % (W + 1)]
             if movers is None:
                 movers = _record(lab, prev, dst, self.last_change, t)
@@ -424,7 +445,7 @@ class StateMonitor:
             self.counts.append(len(movers) if changed is None else int(changed))
             step = np.sqrt(((centers - self._C) ** 2).sum(1))
             self.drift.append(float((step / _half_nearest(centers)).max()))
-        else:
+        elif self.history:
             _store(lab, self.H[0])
             self._Sring[0] = _sizes(self.H[0], self.k)
         self._C = np.array(centers, dtype=np.float64, copy=True)
@@ -445,6 +466,8 @@ class StateMonitor:
         return float(move.max() / step)
 
     def window(self, idx, t=None):
+        if self.H is None:
+            raise ValueError("this monitor keeps no label history (history=False)")
         t = self.t if t is None else t
         W = self.params.window
         rows = np.array([s % (W + 1) for s in range(max(0, t - W), t + 1)], dtype=np.int64)
@@ -471,6 +494,18 @@ class StateMonitor:
     def unstable_count(self):
         return int(sum(len(p_) for p_ in self._last_moves()))
 
+    def switch_counts(self, idx):
+        """Label switches of the points ``idx`` within the last W iterations, from the movers."""
+        W, t = self.params.window, self.t
+        parts = [self._movers[s_ % (W + 1)] for s_ in range(max(1, t - W + 1), t + 1)]
+        idx = np.asarray(idx, dtype=np.int64)
+        if not parts or not len(idx):
+            return np.zeros(len(idx), dtype=np.int64)
+        moved, counts = np.unique(np.concatenate(parts), return_counts=True)
+        pos = np.searchsorted(moved, idx)
+        pos = np.minimum(pos, len(moved) - 1)
+        return np.where(moved[pos] == idx, counts[pos], 0)
+
     def assess(self):
         """Return (stop, regime, state) for the current iteration."""
         p, t, W = self.params, self.t, self.params.window
@@ -484,7 +519,7 @@ class StateMonitor:
         state["unstable_frac"] = u
         if u <= p.unstable_tol:
             return self._log(True, "drift", state)
-        if self.rule != "auto" or u > p.max_unstable:
+        if self.rule == "unstable" or u > p.max_unstable:
             return self._log(False, "running", state)
         # The groups are judged in order of cost; a failed group ends the iteration's judgement.
         # representatives
@@ -527,35 +562,52 @@ class StateMonitor:
 
 
 def settle(Hw, current, rule="auto", alpha=0.0, pooled_prior=0.0, n_clusters=None, oscillation_rule="frequency",
-           regime="drift"):
+           regime="drift", n_switches=None, width=None):
     """Settle the m unstable points from their (W+1, m) label windows.
 
     Returns (labels, states, probs, oscillating) where (states, probs) is the sparse soft
     membership (visited clusters padded with -1) and ``oscillating`` flags points that
-    switched at least twice.
+    switched at least twice. ``rule="auto"`` is ``"history"`` (0.5). Rules that keep the
+    labels need no window: pass ``Hw=None`` with the points' ``n_switches`` and the window
+    ``width`` (W + 1).
     """
-    Hw = np.ascontiguousarray(Hw, dtype=np.int64)
     current = np.asarray(current, dtype=np.int64)
-    m = Hw.shape[1]
-    osc = switches(Hw) >= 2
-    if rule == "keep":
-        S = np.full((m, Hw.shape[0]), -1, dtype=np.int64)
-        P = np.zeros((m, Hw.shape[0]))
+    m = len(current)
+    if rule == "auto":
+        rule = "history"
+    if Hw is not None:
+        Hw = np.ascontiguousarray(Hw, dtype=np.int64)
+        width = Hw.shape[0]
+        n_switches = switches(Hw)
+    osc = np.asarray(n_switches) >= 2
+    if rule == "keep" or (rule == "oscillation" and regime != "oscillation"):
+        S = np.full((m, width), -1, dtype=np.int64)
+        P = np.zeros((m, width))
         S[:, 0] = current
         P[:, 0] = 1.0
         return current.copy(), S, P, osc
-    if rule == "auto" and regime == "oscillation":
+    if Hw is None:
+        raise ValueError(f"assign_rule={rule!r} in the {regime} regime needs the label window")
+    if rule == "oscillation":           # oscillating run: every unstable point from its history
+        if oscillation_rule == "markov":
+            prior = _mk.pooled_prior(Hw, int(n_clusters), pooled_prior) if pooled_prior > 0 else None
+            S, P = _mk.stationary(Hw, alpha=alpha, prior=prior)
+        else:
+            S, P = _mk.frequency(Hw)
+        labels = _mk.argmax_label(S, P, current) if m else current.copy()
+        return labels, S, P, osc
+    if rule == "history" and regime == "oscillation":
         S, P = _mk.frequency(Hw)
         labels = _mk.argmax_label(S, P, current) if m else current.copy()
         return labels, S, P, osc
-    if rule == "markov" or (rule == "auto" and oscillation_rule == "markov"):
+    if rule == "markov" or (rule == "history" and oscillation_rule == "markov"):
         prior = _mk.pooled_prior(Hw, int(n_clusters), pooled_prior) if pooled_prior > 0 else None
         S, P = _mk.stationary(Hw, alpha=alpha, prior=prior)
-    elif rule in ("frequency", "auto"):
+    elif rule in ("frequency", "history"):
         S, P = _mk.frequency(Hw)
     else:
         raise ValueError(f"assign_rule must be one of {ASSIGN_RULES}")
-    if rule == "auto":
+    if rule == "history":
         S = S.copy()
         P = P.copy()
         keep = ~osc

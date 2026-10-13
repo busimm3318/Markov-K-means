@@ -505,3 +505,106 @@ def test_engine_movers_record_the_same_history_as_a_label_scan(blobs, algorithm)
         np.testing.assert_array_equal(a.window(everyone), b.window(everyone))
         np.testing.assert_array_equal(a.last_change, b.last_change)
         np.testing.assert_array_equal(a.unstable(), b.unstable())
+
+
+# ---------------------------------------------------------------- 0.5: rule names, history-free monitor
+
+
+def test_monitor_without_history_decides_like_one_with_it(blobs):
+    from markov_kmeans._engines import HamerlyEngine
+
+    C0 = datasets.init_random(blobs, 12, seed=7)
+    e = HamerlyEngine(blobs, C0)
+    p = _rules.StopParams(window=4, min_iter=4, unstable_tol=0.02)
+    full = _rules.StateMonitor(len(blobs), 12, p, exact=True, rule="unstable")
+    lite = _rules.StateMonitor(len(blobs), 12, p, exact=True, rule="unstable", history=False)
+    assert lite.H is None
+    full.push(e.labels, e.centers)
+    lite.push(e.labels, e.centers)
+    for _ in range(25):
+        ch = e.step()
+        full.push(e.labels, e.centers, ch, movers=e.movers)
+        lite.push(e.labels, e.centers, ch, movers=e.movers)
+        assert full.assess()[:2] == lite.assess()[:2]
+        U = full.unstable()
+        np.testing.assert_array_equal(U, lite.unstable())
+        np.testing.assert_array_equal(lite.switch_counts(U), _rules.switches(full.window(U)))
+        if ch == 0:
+            break
+    with pytest.raises(ValueError):
+        lite.window(U)
+    with pytest.raises(ValueError):
+        _rules.StateMonitor(10, 2, exact=True, rule="monitor", history=False)
+
+
+def test_switch_counts_match_the_label_window():
+    rng = np.random.default_rng(8)
+    n, k = 5000, 6
+    mon = _rules.StateMonitor(n, k, _rules.StopParams(window=5, min_iter=5), exact=False)
+    lab = rng.integers(0, k, n)
+    mon.push(lab, rng.random((k, 2)))
+    for t in range(1, 12):
+        lab = lab.copy()
+        idx = rng.choice(n, 400, replace=False)
+        lab[idx] = (lab[idx] + rng.integers(1, k, len(idx))) % k       # every listed point really moves
+        mon.push(lab, rng.random((k, 2)), movers=np.sort(idx))
+        U = mon.unstable()
+        np.testing.assert_array_equal(mon.switch_counts(U), _rules.switches(mon.window(U)))
+
+
+def test_new_rule_names_reproduce_the_defaults(blobs):
+    C0 = datasets.init_random(blobs, 12, seed=2)
+    a = MarkovKMeans(12, init=C0).fit(blobs)
+    b = MarkovKMeans(12, init=C0, stop_rule="monitor", assign_rule="history").fit(blobs)
+    assert a.n_iter_ == b.n_iter_ and a.stop_reason_ == b.stop_reason_
+    np.testing.assert_array_equal(a.labels_, b.labels_)
+    np.testing.assert_array_equal(a.unstable_indices_, b.unstable_indices_)
+    np.testing.assert_array_equal(a.unstable_probs_, b.unstable_probs_)
+
+
+def test_history_free_fit_stops_like_the_full_monitor(blobs):
+    C0 = datasets.init_random(blobs, 12, seed=2)
+    kw = dict(init=C0, stop_rule="unstable", unstable_tol=0.03, window=5, min_iter=5, representatives="current")
+    lite = MarkovKMeans(12, assign_rule="oscillation", **kw).fit(blobs)
+    full = MarkovKMeans(12, assign_rule="history", **kw).fit(blobs)
+    assert lite.n_iter_ == full.n_iter_ and lite.stop_reason_ == full.stop_reason_
+    np.testing.assert_array_equal(lite.labels_at_stop_, full.labels_at_stop_)
+    np.testing.assert_array_equal(lite.unstable_indices_, full.unstable_indices_)
+    np.testing.assert_array_equal(lite.oscillating_, full.oscillating_)
+    # a drifting run keeps its labels: no history settlement
+    assert lite.regime_ == "drift" and lite.oscillating_.any()     # some points switched twice
+    np.testing.assert_array_equal(lite.labels_, lite.labels_at_stop_)
+    assert np.all(lite.unstable_probs_[:, 0] == 1.0)
+
+
+def test_oscillation_rule_settles_an_oscillating_run_from_histories():
+    Hw = np.tile(np.array([[0], [1]]), (3, 40))[:5]        # every point alternates 0, 1, 0, 1, 0
+    cur = Hw[-1].copy()
+    lab, S, P, osc = _rules.settle(Hw, cur, rule="oscillation", regime="oscillation")
+    assert osc.all() and np.allclose(np.sort(P, 1)[:, -2:], [[0.4, 0.6]] * 40)
+    lab_d, S_d, P_d, _ = _rules.settle(Hw, cur, rule="oscillation", regime="drift")
+    np.testing.assert_array_equal(lab_d, cur)
+    assert np.all(P_d[:, 0] == 1.0)
+    # rules that keep the labels need no window
+    lab_k, S_k, P_k, osc_k = _rules.settle(None, cur, rule="keep", n_switches=np.full(40, 4), width=5)
+    np.testing.assert_array_equal(lab_k, cur)
+    assert osc_k.all() and S_k.shape == (40, 5)
+    with pytest.raises(ValueError):
+        _rules.settle(None, cur, rule="oscillation", regime="oscillation", n_switches=np.full(40, 4), width=5)
+
+
+def test_future_warnings_only_when_the_06_meaning_would_change_the_run():
+    import warnings
+
+    mk = MarkovKMeans(4)
+    with pytest.warns(FutureWarning, match="stop_rule"):
+        mk._warn_defaults(True, "stable_drift", "drift", np.zeros(3, bool))
+    with pytest.warns(FutureWarning, match="assign_rule"):
+        mk._warn_defaults(True, "few_unstable", "drift", np.array([False, True]))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        mk._warn_defaults(True, "few_unstable", "drift", np.zeros(3, bool))       # nothing would change
+        mk._warn_defaults(False, "stable_drift", "oscillation", np.ones(3, bool))  # mini-batch, oscillating
+        MarkovKMeans(4, stop_rule="monitor", assign_rule="history")._warn_defaults(
+            True, "stable_drift", "drift", np.ones(3, bool))                        # explicit choices
+        MarkovKMeans(4, t0=5)._warn_defaults(True, "t0", "drift", np.ones(3, bool))
