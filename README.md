@@ -204,6 +204,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 | Codebooks that jitter strongly, such as EMA VQ codebooks in image tokenizers | The rule rightly never intervenes, so monitoring costs time and saves nothing. | plain training; distance-based soft tokens |
 | You need the exact converged partition | It stops early by design. | run to convergence |
 | A rough answer from 1/count mini-batch | Waiting for the observation window costs more than it saves. | a short fixed number of epochs |
+| Mean-shift image segmentation, including the bilateral-filter form | Each pixel's point converges on its own and drops out of the computation, so the late iterations already cost almost nothing, and rebuilding the segmentation to monitor it costs more than they do. When the whole image is re-filtered every pass (iterated bilateral filter), it stops early but no closer to the converged segmentation than a fixed number of passes taking the same time. | the usual per-pixel stop, or a fixed number of passes |
 
 ### Reading the soft membership
 
@@ -238,7 +239,7 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 
 ### Further reading
 
-- [Evaluation report](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md): methods, every number behind the figures, colour quantization and VQ codebook studies
+- [Evaluation report](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md): methods, every number behind the figures, colour quantization, VQ codebook and mean-shift segmentation studies
 - [Prior work](https://github.com/busimm3318/Markov-K-means/blob/main/docs/literature_review.md)
 - [Quick start](https://github.com/busimm3318/Markov-K-means/blob/main/examples/quickstart.py)
 - Citing: [CITATION.cff](https://github.com/busimm3318/Markov-K-means/blob/main/CITATION.cff), or "Cite this repository" on the GitHub page
@@ -427,6 +428,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 | 이미지 토크나이저의 EMA VQ 코드북처럼 크게 흔들리는 코드북 | 규칙이 개입하지 않는 것이 옳으므로, 감시 비용만 들고 절감은 없다. | 일반 학습, 거리 기반 soft 토큰 |
 | 정확히 수렴한 분할이 필요할 때 | 설계상 일찍 멈춘다. | 끝까지 수렴 |
 | 1/count mini-batch로 대략적인 답만 필요할 때 | 관찰 창을 기다리는 비용이 아끼는 시간보다 크다. | 짧은 고정 epoch |
+| bilateral filter 기반을 포함한 평균이동 영상 분할 | 화소마다 점이 따로 수렴하고 계산에서 빠지므로 늦은 반복은 이미 거의 공짜다. 감시를 위해 분할을 다시 만드는 비용이 오히려 더 크다. 매 회 영상 전체를 다시 거르는 반복 bilateral 필터에서는 일찍 멈추지만, 같은 시간을 쓰는 고정 반복 수보다 수렴한 분할에 가깝지 않다. | 통상의 점별 정지, 또는 고정 반복 수 |
 
 ### soft 소속도 읽는 법
 
@@ -461,7 +463,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 
 ### 더 보기
 
-- [평가 보고서](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md): 방법, 그림 뒤의 모든 수치, 색 양자화·VQ 코드북 실험
+- [평가 보고서](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md): 방법, 그림 뒤의 모든 수치, 색 양자화·VQ 코드북·평균이동 분할 실험
 - [선행연구](https://github.com/busimm3318/Markov-K-means/blob/main/docs/literature_review.md)
 - [빠른 시작 예제](https://github.com/busimm3318/Markov-K-means/blob/main/examples/quickstart.py)
 - 인용: [CITATION.cff](https://github.com/busimm3318/Markov-K-means/blob/main/CITATION.cff) 또는 GitHub 페이지의 "Cite this repository"

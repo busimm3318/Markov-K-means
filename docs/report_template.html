@@ -143,6 +143,7 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
     <span class="pill done"><span class="dot"></span>T₀ 스윕 26개 사례</span>
     <span class="pill done"><span class="dot"></span>자동 규칙 10개 사례</span>
     <span class="pill done"><span class="dot"></span>색 양자화 · VQ 코드북</span>
+    <span class="pill done"><span class="dot"></span>평균이동 영상 분할</span>
     <span class="pill done"><span class="dot"></span>PyPI markov-kmeans 0.2.0</span>
   </div>
 </header>
@@ -395,6 +396,23 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
     <li>Sentinel-2에서 의사 대표점이 옮긴 화소는 대부분 96% 이상 맞았다. 합성 정확 Lloyd에서는 67~70%로, 군집이 크게 겹친 데이터에서는 이득이 작다.</li>
     <li>상수 스텝에서는 흔들리는 대표점의 평균이 현재 위치보다 기준에 가까워(평균 오차 약 절반), mini-batch의 최종 대표점으로 쓴다.</li>
     <li>외삽 상한 rho_max는 0.95가 정확 Lloyd에서 가장 좋거나 같다. 더 높이면 지나친 외삽으로 오히려 나빠지거나 안전장치가 거부한다.</li>
+  </ul>
+</section>
+
+<section id="meanshift">
+  <header><div class="eyebrow">응용 4 · bilateral filter 위의 평균이동 영상 분할</div><h2>점이 따로 수렴하면 꼬리는 이미 공짜이고, 결합된 반복에서는 고정 반복 수와 같다</h2></header>
+  <p class="prose">평균이동 분할은 화소마다 점 (행, 열, L*, u*, v*)를 공간 창 안 화소의 bilateral 가중 평균으로 옮겨 모드에 모은 뒤, 색이 hr/2 안인 이웃을 잇는다. BSDS500 test 영상(15만 화소)에서 두 형태를 시험했다. 평균이동 필터링(표준형)은 영상이 고정이고 점이 따로 수렴하며, 수렴한 점은 계산에서 빠진다. 반복 bilateral 필터는 영상 자체를 거듭 걸러 매 회 모든 화소를 다시 계산한다. Markov-K-means는 분할의 영역을 군집으로, 영역의 평균색을 대표점으로 보고 그대로 옮겼다(기본 임계값).</p>
+  <figure class="chart"><div class="chart-frame"><img src="figures/fig14_meanshift_seg.png" alt="평균이동 분할: 시간이 쓰이는 곳, 정지 규칙별 시간과 오차" loading="lazy"></div><figcaption><span class="fig-no">그림 12</span>왼쪽: 반복을 몇 % 했을 때 필터링 시간을 몇 % 썼는지(중앙값)와 Markov-K-means가 멈춘 곳. 가운데·오른쪽: 규칙별 시간과 수렴한 분할과의 차이(중앙값). 속이 빈 표시는 감시 비용을 0으로 가정한 값.</figcaption></figure>
+  <div class="table-title">평균이동 필터링, (hs, hr) = (7, 6.5), 영상 100장</div>
+  {{T:meanshift_ms_fine}}
+  <div class="table-title">꼬리는 반복 수에는 있고 계산량에는 없다</div>
+  {{T:meanshift_tail}}
+  <details><summary>설정 · 반복 bilateral 필터 · Markov-K-means가 멈춘 상태 · 거친 대역폭</summary>{{T:meanshift_setup}}<div style="height:.75rem"></div>{{T:meanshift_ibf}}<div style="height:.75rem"></div>{{T:meanshift_mk}}<div style="height:.75rem"></div>{{T:meanshift_ms_coarse}}</details>
+  <ul class="points prose">
+    <li>평균이동 필터링: Markov-K-means는 수렴 반복의 57%(평탄)와 36%(가우스)에서 멈추지만, 그때까지 필터링 시간의 99%와 96%를 이미 썼다. 늦은 반복은 아직 움직이는 소수의 점만 계산하므로 반복당 0.3–1.0 ms다. 분할 전체를 다시 만드는 감시기(반복당 약 12 ms)를 더하면 끝까지 돌리는 것보다 28–78% 느리다.</li>
+    <li>사후 최적 정지로도 오차 1% 이하를 계속 유지하려면 시간의 95%, 0.1% 이하면 98%를 써야 한다. 어떤 정지 규칙도 아낄 몫이 2–5%뿐이다.</li>
+    <li>반복 bilateral 필터: 매 회 모든 화소를 계산하므로 꼬리가 계산량에도 있다(수렴까지 중앙값 1,128–1,380회). Markov-K-means는 시간 6–10%에 멈추지만 수렴한 분할과 화소 6–7%가 다르고, 같은 시간의 고정 100회와 같은 곡선 위에 있다. 분할이 오래 그대로이다가 문턱을 넘는 순간 영역이 합쳐지기 때문이다.</li>
+    <li>의사 대표점은 평균이동 필터링에서 오차를 조금 줄이고(가우스 0.69% → 0.55%), 반복 bilateral 필터에서는 40번 모두 안전장치가 거부했다. 평균이동에는 진동이 없어 라벨 연쇄가 옮긴 화소는 거의 없다.</li>
   </ul>
 </section>
 
