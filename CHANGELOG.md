@@ -1,6 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
+
+The defaults are unchanged in this release; it prepares a simpler default path for 0.6 and
+warns where that change would alter a run, as promised when the status became Beta.
+
+### Added
+* `stop_rule="monitor"`: the full monitor under its own name (what `"auto"` means in 0.5).
+* `assign_rule="oscillation"`: label histories only when the run oscillates; a drifting run
+  keeps its labels. `assign_rule="history"`: the current settlement under its own name.
+* A monitor without label history (`StateMonitor(history=False)`, rule `"unstable"` only):
+  it records just the points that changed at each iteration, from which the unstable set and
+  the switch counts follow. `MarkovKMeans` uses it on exact engines with
+  `stop_rule="unstable"` and `assign_rule="oscillation"` (or `"keep"`): no (W + 1) x n label
+  ring, no per-iteration copy of the labels.
+
+### Deprecated
+* `stop_rule="auto"` will mean `"unstable"` on exact engines (Hamerly, Lloyd) from 0.6; the
+  extra tests of the full monitor rarely stop earlier there, and the projected-changes test
+  (`"stable_drift"`) can stop too early on imbalanced mixtures. A `FutureWarning` is raised
+  when an exact run stops by the `stable_drift` or `oscillation` test with `stop_rule="auto"`.
+* `assign_rule="auto"` will mean `"oscillation"` from 0.6: settling a drifting run's points
+  from their histories gains nothing (an exact run's last moves are mostly right). A
+  `FutureWarning` is raised when a drifting run settles oscillating points from their
+  histories with `assign_rule="auto"`.
+* Set both parameters explicitly to silence the warnings: `"monitor"` and `"history"` keep
+  the current behaviour, `"unstable"` and `"oscillation"` adopt the new one.
 
 ### Documentation (corrections after an external review)
 * On exact K-means the automatic stop is in effect a threshold on the share of points that

@@ -227,14 +227,16 @@ r.labels, r.dense(n_clusters), r.uncertainty
 | `n_clusters` | 8 | number of clusters |
 | `algorithm` | `"hamerly"` | `"hamerly"`, `"lloyd"`, `"minibatch"` |
 | `learning_rate`, `eta`, `batch_size` | `"count"`, 2e-4, 4096 | mini-batch step: `"count"` (1/count) or `"constant"` (fixed `eta`) |
-| `stop_rule` | `"auto"` | `"auto"` judges the state; `"unstable"` looks only at the share of changing points |
-| `assign_rule` | `"auto"` | `"auto"` (by regime), `"markov"`, `"frequency"`, `"keep"` |
+| `stop_rule` | `"auto"` | `"monitor"` judges the state; `"unstable"` looks only at the share of recently changed points (a threshold, no label history needed); `"auto"` is `"monitor"` in 0.5 and becomes `"unstable"` on exact engines in 0.6 |
+| `assign_rule` | `"auto"` | `"history"` settles oscillating points from their label histories in every regime; `"oscillation"` only when the run oscillates (a drifting run keeps its labels); `"markov"`, `"frequency"`, `"keep"`; `"auto"` is `"history"` in 0.5 and becomes `"oscillation"` in 0.6 |
 | `t0` | `None` | stop at this iteration instead, then settle |
 | `representatives` | `"markov"` | `"markov"` finishes from the pseudo representatives; `"current"` settles against the current centers only (the 0.3 behaviour) |
 | `unstable_tol` | 1e-3 | lower stops later and leaves fewer undecided points |
 | `window` | 10 | iterations of label history kept per point |
 | `min_iter`, `max_iter` | 10, 300 | iteration bounds |
 | `center_update` | `"auto"` | final centers: `"hard"`, `"soft"` (membership-weighted), `"pseudo"` (the pseudo representatives), `"none"` |
+
+**Changes ahead (0.6).** The defaults will become the simpler path that the evaluation supports: on exact engines the run stops on the share of recently changed points alone, and label histories are used only when the run oscillates. With `stop_rule="unstable", assign_rule="oscillation"` you get that path now; on an exact engine the run then keeps no label history (less memory, a cheaper monitor). Until then a `FutureWarning` appears only when the change would alter a run; set both parameters explicitly to silence it (`"monitor"` and `"history"` keep the current behaviour).
 
 The monitor's other thresholds are documented in the docstring; the evaluation used their defaults. `assign_rule="markov"` settles every undecided point by the long-run law of its label Markov chain. Diagnostics include `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_`, `labels_at_stop_`, and for the pseudo representatives `pseudo_centers_`, `center_rho_`, `pseudo_accepted_` and `predicted_moves_`. `MarkovKMeans` is a scikit-learn estimator: it passes scikit-learn's `check_estimator` and works with `clone`, `Pipeline`, `GridSearchCV` and `set_output`.
 
@@ -452,14 +454,16 @@ r.labels, r.dense(n_clusters), r.uncertainty
 | `n_clusters` | 8 | 군집 수 |
 | `algorithm` | `"hamerly"` | `"hamerly"`, `"lloyd"`, `"minibatch"` |
 | `learning_rate`, `eta`, `batch_size` | `"count"`, 2e-4, 4096 | mini-batch 보폭: `"count"`(1/count) 또는 `"constant"`(고정 `eta`) |
-| `stop_rule` | `"auto"` | `"auto"`는 상태를 판정하고, `"unstable"`은 바뀌는 점의 비율만 본다 |
-| `assign_rule` | `"auto"` | `"auto"`(체제별), `"markov"`, `"frequency"`, `"keep"` |
+| `stop_rule` | `"auto"` | `"monitor"`는 상태를 판정하고, `"unstable"`은 최근에 바뀐 점의 비율만 본다(임계값, 라벨 이력 불필요). `"auto"`는 0.5에서 `"monitor"`이고, 0.6부터 exact 엔진에서 `"unstable"`이 된다 |
+| `assign_rule` | `"auto"` | `"history"`는 어떤 체제에서든 진동하는 점을 라벨 이력으로 정리하고, `"oscillation"`은 실행이 진동할 때만 그렇게 한다(표류하는 실행은 라벨 유지). `"markov"`, `"frequency"`, `"keep"`도 있다. `"auto"`는 0.5에서 `"history"`이고, 0.6부터 `"oscillation"`이 된다 |
 | `t0` | `None` | 이 반복에서 멈춘 뒤 정리한다 |
 | `representatives` | `"markov"` | `"markov"`는 의사 대표점으로 마무리하고, `"current"`는 현재 대표점 기준으로 이력 정리만 한다(0.3 동작) |
 | `unstable_tol` | 1e-3 | 낮출수록 늦게 멈추고 미결정 점이 줄어든다 |
 | `window` | 10 | 점마다 보관하는 라벨 이력의 반복 수 |
 | `min_iter`, `max_iter` | 10, 300 | 반복 수 범위 |
 | `center_update` | `"auto"` | 최종 대표점: `"hard"`, `"soft"`(소속도 가중), `"pseudo"`(의사 대표점), `"none"` |
+
+**예정된 변경 (0.6).** 기본값이 평가 결과가 뒷받침하는 단순한 경로로 바뀐다. exact 엔진에서는 최근에 바뀐 점의 비율만 보고 멈추고, 라벨 이력은 실행이 진동할 때만 쓴다. `stop_rule="unstable", assign_rule="oscillation"`으로 지금 바로 쓸 수 있고, exact 엔진에서는 이때 라벨 이력을 아예 보관하지 않는다(메모리가 줄고 감시 비용이 싸진다). 그 전까지는 이 변경이 실제로 실행 결과를 바꿀 때만 `FutureWarning`이 나온다. 두 매개변수를 명시하면 경고가 사라진다(`"monitor"`와 `"history"`는 지금 동작을 유지한다).
 
 감시기의 나머지 임계값은 docstring에 정리되어 있고, 평가는 모두 기본값으로 했다. `assign_rule="markov"`는 모든 미결정 점을 라벨 Markov 연쇄의 장기 분포로 정리한다. 진단 속성으로 `n_iter_`, `stop_reason_`, `regime_`, `decision_trace_`, `unstable_fraction_`, `n_dist_`, `fit_seconds_`, `labels_at_stop_`, 의사 대표점 관련 `pseudo_centers_`, `center_rho_`, `pseudo_accepted_`, `predicted_moves_`가 있다. `MarkovKMeans`는 scikit-learn 추정기다. scikit-learn의 `check_estimator`를 통과하고 `clone`, `Pipeline`, `GridSearchCV`, `set_output`과 함께 쓸 수 있다.
 
