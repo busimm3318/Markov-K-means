@@ -19,3 +19,4 @@ experiments/results/vq_codebook*.csv
 # downsampled scene maps (about 9 MB a scene); regenerate with python -m experiments.sentinel2_maps
 experiments/results/sentinel2_maps/
 experiments/results/sentinel2_simple_*.csv
+experiments/results/sentinel2_accel.csv
