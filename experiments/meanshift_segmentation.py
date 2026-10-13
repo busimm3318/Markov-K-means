@@ -88,24 +88,32 @@ def _eval(img, R, ihs2, ihr2, p, m):
 
 
 @njit(cache=True)
-def _dot(a, b, ihs, ihr):
-    return ((a[0] * b[0] + a[1] * b[1]) * ihs * ihs + (a[2] * b[2] + a[3] * b[3] + a[4] * b[4]) * ihr * ihr)
+def _shift(a, b, ihs, ihr):
+    """Distance between two joint points in bandwidth units."""
+    s = 0.0
+    for j in range(5):
+        d = (a[j] - b[j]) * (ihs if j < 2 else ihr)
+        s += d * d
+    return np.sqrt(s)
 
 
 @njit(cache=True)
 def _try_extrapolate(img, R, ihs, ihr, cur, h1, h2, dens, eps, rho_max, ye, me):
     """AR(1) limit of the path (h2, h1, cur); (accepted, density, evaluations spent)."""
-    d1 = cur - h1
-    d0 = h1 - h2
-    den = _dot(d0, d0, ihs, ihr)
-    if den <= 0.0:
+    s00 = s10 = 0.0
+    for j in range(5):
+        w = ihs if j < 2 else ihr
+        a, b = (h1[j] - h2[j]) * w, (cur[j] - h1[j]) * w
+        s00 += a * a
+        s10 += a * b
+    if s00 <= 0.0:
         return False, dens, 0
-    rho = min(max(_dot(d1, d0, ihs, ihr) / den, 0.0), rho_max)
-    jump = d1 * (rho / (1.0 - rho))
-    if np.sqrt(_dot(jump, jump, ihs, ihr)) <= eps:      # a plain step or two from converging: not worth it
+    rho = min(max(s10 / s00, 0.0), rho_max)
+    f = rho / (1.0 - rho)
+    if f * _shift(cur, h1, ihs, ihr) <= eps:             # a plain step or two from converging: not worth it
         return False, dens, 0
     for j in range(5):
-        ye[j] = cur[j] + jump[j]
+        ye[j] = cur[j] + (cur[j] - h1[j]) * f
     ye[0] = min(max(ye[0], 0.0), img.shape[1] - 1.0)
     ye[1] = min(max(ye[1], 0.0), img.shape[0] - 1.0)
     de = _eval(img, R, ihs * ihs, ihr * ihr, ye, me)
@@ -131,8 +139,7 @@ def mean_shift(img, hs, hr, eps, max_iter, every, rho_max, final_extrap):
         dens = _eval(img, R, ihs * ihs, ihr * ihr, cur, nxt)
         nev, k, nh = 1, 0, 0
         while True:
-            dlt = nxt - cur
-            if np.sqrt(_dot(dlt, dlt, ihs, ihr)) < eps:
+            if _shift(nxt, cur, ihs, ihr) < eps:
                 break
             if k >= max_iter:
                 if final_extrap and nh == 2:
@@ -209,31 +216,38 @@ def _window(url, row, col, size):
     return np.clip((rgb - lo) / (hi - lo), 0, 1) * 255.0
 
 
+TUNING = ("photo", "seoul", "iowa")            # looked at while the method was being designed
+HELDOUT = ("flower", "nile", "netherlands")    # first seen after the grid and the criterion were fixed
+
+
 def images(size=256):
-    """{name: (size, size, 3) float64 in 0..255}: a natural photograph and two Sentinel-2 10 m windows."""
+    """{name: (size, size, 3) float64 in 0..255}: photographs and Sentinel-2 10 m windows, TUNING then HELDOUT."""
     if os.path.exists(CACHE):
         z = np.load(CACHE)
-        if all(z[k].shape[0] >= size for k in z.files):
-            return {k: z[k][:size, :size] for k in z.files}
+        if all(k in z.files for k in TUNING + HELDOUT):
+            return {k: z[k][:size, :size] for k in TUNING + HELDOUT}
     from sklearn.datasets import load_sample_images
 
     scenes = pd.read_csv(os.path.join(RESULTS, "sentinel2_scenes.csv"))
     url = {s.split(" (")[0]: u for s, u in zip(scenes.site, scenes.url)}
-    china = load_sample_images().images[0].astype(np.float64)
-    r0, c0 = (china.shape[0] - 384) // 2, (china.shape[1] - 384) // 2
-    out = {"photo": china[r0:r0 + 384, c0:c0 + 384]}
-    out["seoul"] = _window(url["Seoul"], 4400, 3600, 384)
-    out["iowa"] = _window(url["Iowa"], 4400, 4400, 384)
+    ph = load_sample_images().images
+    crop = lambda a: a[(a.shape[0] - 384) // 2:(a.shape[0] - 384) // 2 + 384,
+                       (a.shape[1] - 384) // 2:(a.shape[1] - 384) // 2 + 384].astype(np.float64)
+    out = {"photo": crop(ph[0]), "seoul": _window(url["Seoul"], 4400, 3600, 384),
+           "iowa": _window(url["Iowa"], 4400, 4400, 384), "flower": crop(ph[1]),
+           "nile": _window(url["Nile Delta"], 4400, 4400, 384), "netherlands": _window(url["Netherlands"], 6000, 3000, 384)}
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     np.savez_compressed(CACHE, **out)
-    return {k: v[:size, :size] for k, v in out.items()}
+    return out
 
 
 # ----------------------------------------------------------------------------- the study
 
-PLAIN_EPS = (0.3, 0.1, 0.03, 0.01, 3e-3, 1e-3)
-ACCEL_EPS = (0.3, 0.1, 0.03, 0.01)
-TAUS = (0.1, 0.03, 0.01, 3e-3)
+EPS_GRID = tuple(float(e) for e in np.geomspace(0.3, 1e-3, 15))       # the same for plain and extrapolating runs
+RHO_MAX = (0.8, 0.95)
+TAUS = (0.1, 0.03, 0.01)
+EVERY = 3
+TARGET_MARGIN = 0.01          # quality target: ARI within this of the reference floor
 
 
 def timed(img, eps, max_iter=5000, every=0, rho_max=0.95, final_extrap=False):
@@ -245,9 +259,12 @@ def timed(img, eps, max_iter=5000, every=0, rho_max=0.95, final_extrap=False):
 def run(size=256, names=None):
     imgs = images(size)
     mean_shift(imgs["photo"][:16, :16].copy(), HS, HR, 0.1, 50, 3, 0.95, True)         # compile
-    rows, tails = [], []
+    f_runs, f_tails = (os.path.join(RESULTS, f"meanshift_{s}.csv") for s in ("runs", "tails"))
+    rows = pd.read_csv(f_runs).to_dict("records") if os.path.exists(f_runs) else []     # resume: keep finished images
+    tails = pd.read_csv(f_tails).to_dict("records") if os.path.exists(f_tails) else []
+    done = {r["image"] for r in tails}
     for name, img in imgs.items():
-        if names and name not in names:
+        if (names and name not in names) or name in done:
             continue
         img = np.ascontiguousarray(img)
         ref, ev_ref, it_ref, s_ref = timed(img, EPS_REF)
@@ -255,7 +272,7 @@ def run(size=256, names=None):
         n_ref, lab_ref = segment(ref)
         floor = compare(ref2, ref, segment(ref2)[1], lab_ref)["ari"]
         n_pix = img.shape[0] * img.shape[1]
-        tails.append(dict(image=name, pixels=n_pix, mean_iters=float(it_ref.mean()), p50=float(np.median(it_ref)),
+        tails.append(dict(image=name, set="tuning" if name in TUNING else "heldout", pixels=n_pix, mean_iters=float(it_ref.mean()), p50=float(np.median(it_ref)),
                           p90=float(np.percentile(it_ref, 90)), p99=float(np.percentile(it_ref, 99)),
                           max=int(it_ref.max()), over10=float((it_ref > 10).mean()), over30=float((it_ref > 30).mean()),
                           over100=float((it_ref > 100).mean()), evals_ref=int(ev_ref.sum()), seconds_ref=s_ref,
@@ -264,25 +281,63 @@ def run(size=256, names=None):
 
         def record(method, out, ev, it, secs, **kw):
             n, lab = segment(out)
-            rows.append(dict(image=name, method=method, evals=int(ev.sum()), evals_vs_ref=float(ev.sum() / ev_ref.sum()),
+            rows.append(dict(image=name, set="tuning" if name in TUNING else "heldout", method=method, evals=int(ev.sum()), evals_vs_ref=float(ev.sum() / ev_ref.sum()),
                              seconds=secs, mean_iters=float(it.mean()), segments=int(n), ari_floor=floor,
                              **kw, **compare(out, ref, lab, lab_ref)))
             print({k: (round(v, 5) if isinstance(v, float) else v) for k, v in rows[-1].items()}, flush=True)
 
-        for eps in PLAIN_EPS:
+        for eps in EPS_GRID:
             record("plain", *timed(img, eps), eps=eps)
-        for eps in ACCEL_EPS:
-            for rho_max in (0.8, 0.95):
-                record("extrapolate", *timed(img, eps, every=3, rho_max=rho_max), eps=eps, rho_max=rho_max, every=3)
+        for eps in EPS_GRID:
+            for rho_max in RHO_MAX:
+                record("extrapolate", *timed(img, eps, every=EVERY, rho_max=rho_max), eps=eps, rho_max=rho_max,
+                       every=EVERY)
         for tau in TAUS:
             cap = int(np.argmax([(it_ref > T).mean() <= tau for T in range(int(it_ref.max()) + 2)]))
             record("cap", *timed(img, EPS_REF, max_iter=cap), eps=EPS_REF, tau=tau, cap=cap)
             record("cap+extrapolate", *timed(img, EPS_REF, max_iter=cap, rho_max=0.95, final_extrap=True),
                    eps=EPS_REF, tau=tau, cap=cap, rho_max=0.95)
-        pd.DataFrame(rows).to_csv(os.path.join(RESULTS, "meanshift_runs.csv"), index=False)
-        pd.DataFrame(tails).to_csv(os.path.join(RESULTS, "meanshift_tails.csv"), index=False)
+        pd.DataFrame(rows).to_csv(f_runs, index=False)
+        pd.DataFrame(tails).to_csv(f_tails, index=False)
     return pd.DataFrame(rows), pd.DataFrame(tails)
 
 
+def report(margins=(0.005, TARGET_MARGIN, 0.02, 0.05)):
+    """Cheapest setting of each family that reaches the quality target, per image, and the verdict."""
+    r = pd.read_csv(os.path.join(RESULTS, "meanshift_runs.csv"))
+    out = []
+    for margin in margins:
+        for img, g in r.groupby("image", sort=False):
+            target = g.ari_floor.iloc[0] - margin
+            ok = g[g.ari >= target]
+            row = dict(margin=margin, image=img, set=g.set.iloc[0], floor=g.ari_floor.iloc[0], target=target)
+            for fam in ("plain", "extrapolate", "cap", "cap+extrapolate"):
+                f = ok[ok.method == fam]
+                if len(f):
+                    b, s = f.loc[f.evals_vs_ref.idxmin()], f.loc[f.seconds.idxmin()]
+                    row.update({f"{fam}_evals": b.evals_vs_ref, f"{fam}_seconds": s.seconds,
+                                f"{fam}_eps": b.eps, f"{fam}_ari": b.ari})
+                else:
+                    row.update({f"{fam}_evals": np.nan, f"{fam}_seconds": np.nan})
+            row["saving_evals"] = 1 - row["extrapolate_evals"] / row["plain_evals"]
+            row["saving_seconds"] = 1 - row["extrapolate_seconds"] / row["plain_seconds"]
+            row["cap_saving_evals"] = 1 - row["cap+extrapolate_evals"] / row["plain_evals"]
+            out.append(row)
+    df = pd.DataFrame(out)
+    df.to_csv(os.path.join(RESULTS, "meanshift_summary.csv"), index=False)
+    pd.set_option("display.width", 220)
+    for margin, g in df.groupby("margin"):
+        print(f"\n== quality target: ARI within {margin} of the reference floor")
+        print(g[["image", "set", "floor", "plain_evals", "plain_eps", "extrapolate_evals", "extrapolate_eps",
+                 "saving_evals", "saving_seconds", "cap_saving_evals"]].round(3).to_string(index=False))
+        for s, gs in g.groupby("set"):
+            n = int((gs.saving_evals.fillna(0) >= 0.25).sum())
+            print(f"   {s}: >= 25 % fewer evaluations on {n} of {len(gs)} images")
+    return df
+
+
 if __name__ == "__main__":
-    run(int(sys.argv[1]) if len(sys.argv) > 1 else 256, sys.argv[2:] or None)
+    if len(sys.argv) > 1 and sys.argv[1] == "report":
+        report()
+    else:
+        run(int(sys.argv[1]) if len(sys.argv) > 1 else 256, sys.argv[2:] or None)
