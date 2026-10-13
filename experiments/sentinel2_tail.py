@@ -154,6 +154,9 @@ def load(url):
 # ----------------------------------------------------------------------------- the tail run
 
 RULES = ("envi_2pct_10", "pct5_10", "pct2", "sklearn_tol", "markov_v03", "markov_auto", "full")
+# the 0.6 default path (stop_rule="unstable" with no label history, labels kept, pseudo representatives),
+# judged on the same iterates by a second monitor; reported by tail_run, not by the wide-area study
+OUT_RULES = RULES[:-1] + ("markov_06", "full")
 
 
 def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER, C0=None, checkpoints=CHECKPOINTS, keep_snaps=False):
@@ -183,6 +186,11 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER, C0=None, checkpoints=CHECKPOI
     t_s = time.perf_counter()
     mon.push(eng.labels, eng.centers)
     mon_s = time.perf_counter() - t_s
+    mon6 = _rules.StateMonitor(n, k, _rules.StopParams(), exact=True, rule="unstable", history=False)
+    t_s = time.perf_counter()
+    mon6.push(eng.labels, eng.centers)
+    mon6_s = time.perf_counter() - t_s
+    path06 = None
 
     curve, snaps, fired, extra = [], {}, {}, {}
     cum = assign0_s
@@ -252,11 +260,36 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER, C0=None, checkpoints=CHECKPOI
                 fired["markov_auto"] = (t, cum + mon_s + settle_s + pseudo_s)
                 snaps["markov_auto"] = lab4.astype(lab_t)
                 del mon      # the monitor is not needed past its decision
+        if path06 is None:
+            t_s = time.perf_counter()
+            mon6.push(eng.labels, eng.centers, changed, movers=eng.movers)
+            stop6, regime6, _ = mon6.assess()
+            mon6_s += time.perf_counter() - t_s
+            if stop6:
+                t_s = time.perf_counter()
+                L = eng.labels.copy()
+                if regime6 == "converged":
+                    lab6, U6 = L, np.empty(0, dtype=np.int64)
+                else:
+                    U6 = mon6.unstable().astype(np.int64)
+                    lab_U, S, P, osc = _rules.settle(None, L[U6], rule="oscillation", regime=regime6,
+                                                     n_switches=mon6.switch_counts(U6), width=mon6.params.window + 1)
+                    saved = (eng.labels.copy(), eng.u.copy(), eng.l.copy())
+                    lab6 = pseudo_finish(X, eng, mon6, L, None, U6, S, P, osc, inplace=True, labels_U=lab_U)[0]
+                    eng.labels, eng.u, eng.l = saved
+                    if lab6 is None:            # pseudo labels rejected: the kept labels
+                        lab6 = L.copy()
+                        lab6[U6] = lab_U
+                fin6_s = time.perf_counter() - t_s
+                path06 = dict(t=t, regime=regime6, mon_s=mon6_s, finish_s=fin6_s, U=len(U6))
+                fired["markov_06"] = (t, cum + mon6_s + fin6_s)
+                snaps["markov_06"] = lab6.astype(lab_t)
+                del mon6
         if changed == 0:
             break
     fired["full"] = (t, cum)
     snaps["full"] = eng.labels.astype(lab_t)
-    for r in RULES:          # rules that never fired stop where the run stopped
+    for r in OUT_RULES:      # rules that never fired stop where the run stopped
         if r not in fired:
             fired[r] = (t, cum)
             snaps[r] = eng.labels.astype(lab_t)
@@ -265,7 +298,7 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER, C0=None, checkpoints=CHECKPOI
     C_ref = compute_centers(X, ref.astype(np.int64), eng.centers)[0]
     sse_ref = inertia(X, C_ref, ref.astype(np.int64))
     rows = []
-    for r in RULES:
+    for r in OUT_RULES:
         lab = snaps[r].astype(np.int64)
         C = compute_centers(X, lab, eng.centers)[0]
         rows.append(dict(rule=r, iterations=fired[r][0], seconds=fired[r][1], time_frac=fired[r][1] / cum,
@@ -295,6 +328,9 @@ def tail_run(X, k=K, seed=SEED, max_iter=MAX_ITER, C0=None, checkpoints=CHECKPOI
                      undecided_recall=float((wrong4 & in4).sum() / max(wrong4.sum(), 1)),
                      undecided_precision=float(wrong4[in4].mean()) if in4.any() else np.nan,
                      rho_median=float(np.median(markov["rho"])))
+    if path06 is not None:
+        extra.update(markov06_iter=path06["t"], markov06_regime=path06["regime"], monitor06_s=path06["mon_s"],
+                     finish06_s=path06["finish_s"], U06_frac=path06["U"] / n)
     extra.update(n=n, k=k, converged=bool(curve[-1]["changed"] == 0), total_iter=t, total_s=cum, seed_s=seed_s,
                  assign0_s=assign0_s, sse_ref=float(sse_ref))
     if keep_snaps:
@@ -397,10 +433,12 @@ RULE_NAMES = {"envi_2pct_10": "changed < 2 % or 10 iterations (ENVI)", "pct5_10"
               "markov_v03": "Markov-K-means 0.3 (label histories only)", "markov_auto": "Markov-K-means 0.4 (default)",
               "full": "to convergence"}
 RULE_NAMES["markov_nomon"] = "Markov-K-means 0.4, stopping point only"
+RULE_NAMES["markov_06"] = "Markov-K-means 0.6 path (threshold, no label history)"
 RULE_KO = {"envi_2pct_10": "변경 < 2 % 또는 10회 (ENVI 기본값)", "pct5_10": "변경 < 5 % 또는 10회",
            "pct2": "변경 < 2 % (상한 없음)", "sklearn_tol": "scikit-learn tol (기본값)",
            "markov_v03": "Markov-K-means 0.3 (라벨 이력 정리만)", "markov_auto": "Markov-K-means 0.4 (기본값)",
-           "markov_nomon": "Markov-K-means 0.4 정지 시점 (감시 비용 제외)", "full": "끝까지 (기준)"}
+           "markov_nomon": "Markov-K-means 0.4 정지 시점 (감시 비용 제외)",
+           "markov_06": "Markov-K-means 0.6 경로 (임계값, 라벨 이력 없음)", "full": "끝까지 (기준)"}
 
 
 def report():
@@ -449,9 +487,12 @@ def report():
 
     ax = axes[1]
     style = {"envi_2pct_10": (SERIES[1], "s"), "pct5_10": (SERIES[3], "D"), "pct2": (SERIES[4], "v"),
-             "sklearn_tol": (SERIES[2], "^"), "markov_v03": (INK2, "P"), "markov_auto": (SERIES[0], "o")}
+             "sklearn_tol": (SERIES[2], "^"), "markov_v03": (INK2, "P"), "markov_auto": (SERIES[0], "o"),
+             "markov_06": (SERIES[5], "X")}
     for rule, (col, mk) in style.items():
         d = rules[rules.rule == rule]
+        if d.empty:
+            continue
         ax.scatter(d.time_frac, d.error.clip(lower=1e-6) * 100, color=col, marker=mk, s=28, alpha=0.6,
                    edgecolor="none")
         ax.scatter([d.time_frac.median()], [d.error.median() * 100], color=col, marker=mk, s=150,
@@ -486,8 +527,8 @@ def report():
                                                       "ENVI 정지": "{}", "2 % 도달": "{:.0f}", "Markov 정지": "{}"},
                                index_name="장면")
     agg = {}
-    for rule in RULES[:-1] + ("markov_nomon", "full"):
-        if rule == "markov_v03" and "markov_v03" not in set(rules.rule):
+    for rule in RULES[:-1] + ("markov_nomon", "markov_06", "full"):
+        if rule not in set(rules.rule):
             continue
         d = rules[rules.rule == rule]
         agg[RULE_KO[rule]] = {"시간 (중앙값)": d.time_frac.median(),
