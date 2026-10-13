@@ -1,6 +1,6 @@
 # Markov-K-means
 
-K-means that stops once the only work left is a handful of boundary points changing cluster, then finishes the run with Markov chains: the path of each center tells where it is heading, and each undecided point's label history tells how it splits between clusters.
+K-means that stops once the only work left is a handful of boundary points changing cluster, then finishes the run from two histories: the path of each center tells where it is heading, and each undecided point's label history tells how it splits between clusters.
 
 [English](#english) · [한국어](#한국어)
 
@@ -36,7 +36,7 @@ The base algorithm runs as usual while the recent labels of every point and the 
 | Representatives | Are the centers travelling, or jittering in place? | the centers barely move, or only jitter around fixed positions |
 | Partitions | Are the clusters reorganising, or only swapping members? | cluster sizes are steady, and few members move or they move both ways |
 
-At the stop, two kinds of Markov chains finish the run.
+At the stop, two histories finish the run.
 
 **1. The centers' chains give pseudo representatives.** Each center's recent path is read as a chain that keeps stepping the same way. Its long-run position is where a converging center is heading, or the middle of a center that only jitters. Every point is then assigned to its nearest pseudo representative. This moves, right away, the points that are about to cross a boundary but have not moved yet, which no label history can see. The new labels are kept only if they fit the data at least as well as the old ones.
 
@@ -53,6 +53,8 @@ At the stop, two kinds of Markov chains finish the run.
 | just moved by the pseudo representatives | mostly its new cluster, some of the old one; the later its boundary would have crossed it, the more of the old |
 
 When the monitor diagnoses an oscillation, every point that changed in the window gets its share of time. Hard labels come from the pseudo representatives; if their labels were not kept, from the larger share.
+
+**What is and is not Markov in the defaults.** The centers' paths are fitted as AR(1) chains. For the labels, the default (`oscillation_rule="frequency"`) uses each point's share of time in each cluster within the window; the long-run law of a fitted label Markov chain is computed only with `oscillation_rule="markov"` or `assign_rule="markov"`. On exact K-means the stop itself is in effect a threshold on the share of points that changed in the last 10 iterations (0.1 %): a single changed-share threshold, once chosen, stops at the same place ([evaluation report, section 9](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md)).
 
 ### Where the time of a run goes
 
@@ -92,7 +94,7 @@ Twelve Sentinel-2 scenes from very different landscapes, each with about thirty 
 | Markov-K-means, label histories only (0.3) | later, at a point that differs from scene to scene | close to the converged map in every scene |
 | Markov-K-means (0.4) | the same stop | closer still in every scene: about two thirds of the remaining difference is gone, for almost no extra time |
 
-The tail is real on satellite images, and the right number of iterations varies so much between scenes that no fixed setting reaches the converged map everywhere. Markov-K-means is the only rule that gets there in every scene without tuning. Almost every pixel still wrong at its stop had not started to move, which is exactly what the pseudo representatives are for: nearly all the pixels they move end where the converged run puts them. The time saved is moderate, because late iterations on low-dimensional imagery are already cheap. The undecided list and soft memberships carry little information here: the scenes settle by drift, and a simple distance ratio flags mixed pixels better.
+The tail is real on satellite images, and the right number of iterations varies so much between scenes (105–460) that no fixed iteration count reaches the converged map everywhere. The usual defaults (2 % changed or 10 iterations, scikit-learn's tolerance) do not either; Markov-K-means' defaults stop close to it in every scene. This is not a better stopping principle: a threshold on the share of changed pixels, set once to about 4×10⁻⁵ for all twelve scenes, stops at the same time with about the same error (median 0.09 % against 0.07 %), and Markov-K-means' stop is in effect such a threshold. Its advantage is that its default was set before these scenes were seen and still landed there. The converged map itself is reproducible: perturbing the starting centers slightly led to exactly the same map in 30 runs on five scenes. Almost every pixel still wrong at its stop had not started to move, which is exactly what the pseudo representatives are for: nearly all the pixels they move end where the converged run puts them. The time saved is moderate, because late iterations on low-dimensional imagery are already cheap. The undecided list and soft memberships carry little information here: the scenes settle by drift, and a simple distance ratio flags mixed pixels better.
 
 With many clusters over a whole region (the southern Korean peninsula as one mosaic, a few hundred clusters), the picture changes. Labels keep shifting between nearly identical clusters for thousands of iterations, while the fit has long stopped improving. Every stopping rule then lies on the same time–error curve as a fixed number of iterations. Markov-K-means finds, without tuning, the point where the fit has settled, but it does not reach the converged labels any sooner. scikit-learn's `MiniBatchKMeans` with its defaults stopped far too early there, with a much worse fit than any of these rules.
 
@@ -189,7 +191,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 |---|---|
 | Large data with a long convergence tail | The tail is cut without tuning. The result differs from the converged one only on a few boundary points. |
 | Constant-step, EMA or online training | A stopping point that no other rule finds. Labels better than the run's last state, and memberships that reflect time spent in each cluster. |
-| Large imagery, such as satellite scenes, when you need the converged map without tuning per scene | It stops close to the converged map in every scene, where fixed thresholds stop too early on some scenes and needlessly late on others. |
+| Large imagery, such as satellite scenes, when you need the converged map without tuning per scene | With its defaults it stops close to the converged map in every scene, where fixed iteration counts and the usual defaults stop too early on some scenes and needlessly late on others. A single changed-share threshold of about 4×10⁻⁵ does as well, if you set it. |
 | Mini-batch or oscillating training where you need to know which points are uncertain | A list of undecided points with soft memberships, ready for review, a more expensive model, or a downstream step that accepts soft assignments. After exact Lloyd the list is short and mostly correct, so it says little. |
 | One setting must serve many datasets | Defaults that stay near the best trade-off whether the run drifts or oscillates. |
 
@@ -259,7 +261,7 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 | 대표점 | 대표점이 이동 중인가, 제자리에서 흔들리기만 하는가? | 대표점이 거의 움직이지 않거나, 고정된 위치 주변에서 흔들리기만 할 때 |
 | 분할 | 군집이 재편되는 중인가, 구성원을 주고받기만 하는가? | 군집 크기가 일정하고, 움직이는 구성원이 적거나 양방향으로 오갈 때 |
 
-멈추면 두 종류의 Markov 연쇄가 실행을 마무리한다.
+멈추면 두 가지 이력이 실행을 마무리한다.
 
 **1. 대표점의 연쇄가 의사 대표점(pseudo representative)을 준다.** 대표점마다 최근 경로를 같은 방식으로 계속 걸어가는 연쇄로 읽는다. 그 장기 위치는 수렴 중인 대표점이 향하는 곳이고, 흔들리기만 하는 대표점이면 흔들림의 한가운데다. 모든 점을 가장 가까운 의사 대표점에 다시 배정한다. 경계를 곧 넘을 참이지만 아직 움직이지 않은 점, 즉 어떤 라벨 이력도 볼 수 없는 점을 지금 옮겨 준다. 새 라벨은 데이터에 대한 적합도가 이전보다 나쁘지 않을 때만 채택한다.
 
@@ -276,6 +278,8 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 | 의사 대표점이 방금 옮긴 점 | 대부분 새 군집, 일부는 옛 군집. 경계가 늦게 지나갈 점일수록 옛 군집 몫이 크다 |
 
 감시기가 진동으로 판정하면, 관찰 창 안에서 바뀐 모든 점이 머문 시간의 비율을 받는다. hard 라벨은 의사 대표점에서 오고, 의사 대표점의 라벨을 채택하지 않았으면 더 큰 비율 쪽이다.
+
+**기본값에서 실제로 Markov인 것과 아닌 것.** 대표점의 경로는 AR(1) 연쇄로 맞춘다. 라벨은 기본값(`oscillation_rule="frequency"`)에서 창 안의 군집별 체류 비율을 쓴다. 라벨 Markov 연쇄의 장기 분포는 `oscillation_rule="markov"`나 `assign_rule="markov"`일 때만 계산한다. 또 exact K-means에서 정지 판정은 사실상 "최근 10회 안에 바뀐 점의 비율 ≤ 0.1%"라는 임계값이어서, 변경 비율 임계값 하나를 한 번 잘 정하면 같은 곳에서 멈춘다([평가 보고서 9절](https://github.com/busimm3318/Markov-K-means/blob/main/docs/results.md)).
 
 ### 실행 시간은 어디에 쓰이는가
 
@@ -315,7 +319,7 @@ The monitor's other thresholds are documented in the docstring; the evaluation u
 | Markov-K-means, 라벨 이력 정리만 (0.3) | 더 늦게, 장면마다 다른 시점 | 모든 장면에서 수렴한 지도에 가깝다 |
 | Markov-K-means (0.4) | 같은 시점 | 모든 장면에서 더 가깝다. 남은 차이의 약 3분의 2가 사라지고, 추가 시간은 거의 없다 |
 
-위성영상에도 꼬리가 분명히 있고, 알맞은 반복 수가 장면마다 크게 달라서 고정된 설정 하나로는 모든 장면에서 수렴 결과에 닿지 못한다. 조정 없이 모든 장면에서 그곳에 닿는 규칙은 Markov-K-means뿐이다. 멈춘 시점에 아직 틀린 화소는 거의 모두 움직이기 시작하지도 않은 화소였고, 의사 대표점이 바로 그런 화소를 위한 것이다. 의사 대표점이 옮긴 화소는 거의 모두 수렴한 실행이 두는 곳으로 갔다. 저차원 영상에서는 늦은 반복이 원래 싸서 절약되는 시간은 크지 않다. 미결정 목록과 soft 소속도는 여기서 정보가 거의 없다. 장면들이 표류 후 정착하는 체제여서, 혼합 화소는 단순한 거리 비가 더 잘 가려낸다.
+위성영상에도 꼬리가 분명히 있고, 알맞은 반복 수가 장면마다 크게 달라서(105–460회) 고정 반복 수 하나로는 모든 장면에서 수렴 결과에 닿지 못한다. 흔히 쓰는 기본값(변경 2% 또는 10회, scikit-learn tol)도 마찬가지이고, Markov-K-means의 기본값은 모든 장면에서 그 가까이에서 멈춘다. 다만 더 나은 정지 원리 때문은 아니다. 변경 비율 임계값을 12개 장면 모두에 약 4×10⁻⁵로 한 번 정해 두면 같은 시간에 거의 같은 오차(중앙값 0.09%, Markov-K-means 0.07%)로 멈추고, Markov-K-means의 정지 판정도 사실상 그런 임계값이다. 장점은 이 장면들을 보기 전에 정한 기본값이 그곳에 떨어졌다는 것이다. 수렴 지도 자체는 재현된다. 시작 중심을 조금 흔들어도 5개 장면 30회 모두 똑같은 지도에 닿았다. 멈춘 시점에 아직 틀린 화소는 거의 모두 움직이기 시작하지도 않은 화소였고, 의사 대표점이 바로 그런 화소를 위한 것이다. 의사 대표점이 옮긴 화소는 거의 모두 수렴한 실행이 두는 곳으로 갔다. 저차원 영상에서는 늦은 반복이 원래 싸서 절약되는 시간은 크지 않다. 미결정 목록과 soft 소속도는 여기서 정보가 거의 없다. 장면들이 표류 후 정착하는 체제여서, 혼합 화소는 단순한 거리 비가 더 잘 가려낸다.
 
 넓은 지역 전체를 많은 군집으로 나누면(한반도 남부를 모자이크 하나로, 군집 수백 개) 양상이 달라진다. 적합도가 더 나아지지 않은 지 오래인데도, 거의 같은 군집끼리 라벨을 주고받는 일이 수천 회 이어진다. 이때는 모든 정지 규칙이 고정 반복 수와 같은 시간–오차 곡선 위에 놓인다. Markov-K-means는 조정 없이 적합도가 자리 잡은 지점을 찾지만, 수렴한 라벨에 더 빨리 닿지는 못한다. 같은 데이터에서 scikit-learn `MiniBatchKMeans` 기본값은 너무 일찍 멈춰, 이 규칙들 어느 것보다 적합도가 크게 나빴다.
 
@@ -412,7 +416,7 @@ r.labels, r.dense(n_clusters), r.uncertainty
 |---|---|
 | 수렴 꼬리가 긴 대용량 데이터 | 조정 없이 꼬리가 끊긴다. 결과는 수렴한 결과와 경계의 소수 점에서만 다르다. |
 | 고정 학습률, EMA, 온라인 학습 | 다른 규칙이 찾지 못하는 정지 시점을 얻는다. 라벨은 마지막 상태보다 정확하고, 소속도는 군집별로 머문 시간을 나타낸다. |
-| 위성영상 같은 대용량 영상에서 장면마다 조정하지 않고 수렴한 지도가 필요할 때 | 모든 장면에서 수렴한 지도 가까이에서 멈춘다. 고정 임계값은 어떤 장면에서는 너무 일찍, 어떤 장면에서는 쓸데없이 늦게 멈춘다. |
+| 위성영상 같은 대용량 영상에서 장면마다 조정하지 않고 수렴한 지도가 필요할 때 | 기본값만으로 모든 장면에서 수렴한 지도 가까이에서 멈춘다. 고정 반복 수와 흔한 기본값은 어떤 장면에서는 너무 일찍, 어떤 장면에서는 쓸데없이 늦게 멈춘다. 변경 비율 임계값 약 4×10⁻⁵를 직접 정해 써도 같은 결과다. |
 | mini-batch나 진동하는 학습에서 어떤 점이 불확실한지 알아야 할 때 | soft 소속도가 붙은 미결정 점 목록을 얻는다. 사람 검토, 더 비싼 모델, soft 배정을 받는 후속 단계로 바로 넘길 수 있다. exact Lloyd 뒤에는 목록이 짧고 대부분 맞는 점이라 정보가 적다. |
 | 설정 하나로 여러 데이터를 처리해야 할 때 | 표류든 진동이든 최적 교환선 가까이에 놓이는 기본값을 쓸 수 있다. |
 

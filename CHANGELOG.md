@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Documentation (corrections after an external review)
+* On exact K-means the automatic stop is in effect a threshold on the share of points that
+  changed in the last 10 iterations. A single changed-share threshold set once for all twelve
+  Sentinel-2 scenes (about 4e-5) stops at the same time with about the same error (median
+  0.09 % against 0.07 %; `experiments/sentinel2_threshold.py`). README and results no longer
+  say that Markov-K-means is the only rule that reaches the converged map without tuning; its
+  advantage is a default chosen before those scenes that still lands there.
+* The pseudo representatives' gain on Sentinel-2 equals 18-38 more plain iterations; after
+  the monitor and settlement costs it is about 3 percentage points of time ahead of a
+  threshold rule.
+* The defaults (`oscillation_rule="frequency"`) never build a transition matrix: oscillating
+  points are settled by their share of time in the window, the others keep their labels. The
+  long-run law of a label Markov chain is used only with `oscillation_rule="markov"` or
+  `assign_rule="markov"`; the 0.4.1 speedup of that law applies to those options only.
+* New: the converged Sentinel-2 maps are reproducible. Perturbing the starting centers
+  (1e-6 and 1e-4 of the feature spread, 30 runs on five scenes) led to exactly the same map
+  every time (`experiments/sentinel2_perturb.py`).
+
 ## 0.4.1
 
 ### Changed
