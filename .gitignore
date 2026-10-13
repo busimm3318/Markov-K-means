@@ -20,3 +20,5 @@ experiments/results/vq_codebook*.csv
 experiments/results/sentinel2_maps/
 experiments/results/sentinel2_simple_*.csv
 experiments/results/sentinel2_accel.csv
+experiments/results/meanshift_runs.csv
+experiments/results/meanshift_tails.csv
