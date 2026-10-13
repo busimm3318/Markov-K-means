@@ -56,9 +56,12 @@ def run(sites=SITES):
 
     scenes = pd.read_csv(os.path.join(RESULTS, "sentinel2_scenes.csv"))
     out = os.path.join(RESULTS, "sentinel2_perturb.csv")
-    rows = []
+    rows = pd.read_csv(out).to_dict("records") if os.path.exists(out) else []     # resume: keep finished scenes
+    done = {r["site"] for r in rows}
     for name in sites:
         s = scenes[scenes.site.str.startswith(name)].iloc[0]
+        if s.site in done:
+            continue
         t0 = time.perf_counter()
         cube, valid = load(s.url)
         X = np.ascontiguousarray(cube[valid], dtype=np.float64)
