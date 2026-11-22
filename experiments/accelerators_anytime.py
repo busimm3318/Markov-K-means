@@ -15,8 +15,15 @@ and the finishing step. Accuracy is the share of labels equal to the accelerator
 (convergence; mini-batch: 100 epochs). The curves sample, at every whole second from 0 to
 the end, the most recent answer available within that budget.
 
+Task difficulty: Gaussian mixtures of n = 2 x 10^6 points in d = 16 with 50 components whose
+means are drawn from N(0, sep^2 I) and unit noise, clustered with k = 50; only the separation
+changes: sep = 4 (very easy: converged in 3 iterations, ARI 1.00 against the components),
+2 (easy: 66, 0.95), 1 (hard: 154, 0.75), 0.5 (very hard: 404, 0.13; iterations and ARI from a
+4 x 10^5-point check).
+
     python -m experiments.accelerators_anytime covtype 64 0   # -> results/accelerators_anytime_<config>.csv
     python -m experiments.accelerators_anytime figure covtype-k64-s0
+    python -m experiments.accelerators_anytime difficulty     # the four separations, one figure each
 """
 from __future__ import annotations
 
@@ -154,14 +161,36 @@ def trace_minibatch(X, C0, seed):
     return df
 
 
-def run(name, k, seed, engines=ENGINES):
+DIFFICULTY = ((4.0, "매우 쉬움"), (2.0, "쉬움"), (1.0, "어려움"), (0.5, "매우 어려움"))
+DIFF_N, DIFF_K = 2_000_000, 50
+
+
+def difficulty_key(sep):
+    return f"gmm2e6-sep{sep:g}-k{DIFF_K}-s0"
+
+
+def run_difficulty(seps=None):
+    from kmeans_accel import datasets
+
+    warmup()
+    for sep, _ in DIFFICULTY:
+        if seps and sep not in seps:
+            continue
+        X, _, _ = datasets.gmm(DIFF_N, 16, DIFF_K, sep=sep, seed=0)
+        run(None, DIFF_K, 0, X=np.ascontiguousarray(X), key=difficulty_key(sep), warm=False)
+        print(figure(difficulty_key(sep), title=f"과제 난이도 {dict(DIFFICULTY)[sep]} (GMM 분리도 {sep:g}): "
+                     f"n = 2,000,000, d = 16, k = {DIFF_K}"), flush=True)
+
+
+def run(name, k, seed, engines=ENGINES, X=None, key=None, warm=True):
     from sklearn.cluster import kmeans_plusplus
     from threadpoolctl import threadpool_limits
 
-    key = config_key(name, None, None, k, seed)
-    X = dataset(name)
+    key = key or config_key(name, None, None, k, seed)
+    X = dataset(name) if X is None else X
     C0, _ = kmeans_plusplus(X, k, random_state=seed)
-    warmup()
+    if warm:
+        warmup()
     out = []
     for e in engines:
         t0 = time.perf_counter()
@@ -191,7 +220,7 @@ def per_second(g, which):
     return s, np.where(idx >= 0, acc[np.maximum(idx, 0)], np.nan)
 
 
-def figure(key="covtype-k64-s0", out=None):
+def figure(key="covtype-k64-s0", out=None, title=None):
     import matplotlib
 
     matplotlib.use("Agg")
@@ -237,8 +266,9 @@ def figure(key="covtype-k64-s0", out=None):
                       label="Markov 적용: 그 시각에 멈추고 이력 정리·의사 대표점 적용 (감시·마무리 시간 포함)"),
                Line2D([], [], ls="", marker="D", ms=8, mfc=SURFACE, mec=MK, mew=1.8, label="Markov 자동 정지 지점")]
     fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=9.5, labelcolor=INK2)
-    ds, rest = key.split("-k")
-    fig.suptitle(f"시간–정확도 교환 곡선: {ds}, k = {rest.split('-')[0]} (1초 간격, 각 초에 그때까지 얻을 수 있는 가장 최근 결과)",
+    ds, rest = key.rsplit("-k", 1)
+    title = title or f"{ds}, k = {rest.split('-')[0]}"
+    fig.suptitle(f"시간–정확도 교환 곡선: {title} (1초 간격, 각 초에 그때까지 얻을 수 있는 가장 최근 결과)",
                  x=0.01, ha="left", fontsize=13, color=INK, fontweight="bold")
     fig.text(0.01, 0.935, "정확도 기준: 각 가속법 자신의 수렴 결과(MiniBatchKMeans는 100 epoch 뒤 결과). 0초에는 아직 결과가 없어 1초부터 찍힌다.",
              fontsize=9.5, color=INK2)
@@ -250,7 +280,9 @@ def figure(key="covtype-k64-s0", out=None):
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "figure":
+    if sys.argv[1] == "difficulty":
+        run_difficulty([float(v) for v in sys.argv[2:]] or None)
+    elif sys.argv[1] == "figure":
         print(figure(*sys.argv[2:3]))
     else:
         run(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]))
