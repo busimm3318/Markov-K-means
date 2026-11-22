@@ -270,8 +270,10 @@ class SkMiniBatch:
         self.since_reassign = 0
         self.step_i = 0
         self.labels = np.full(self.n, -1, dtype=np.int32)
-        lab, _ = self.nearest(self.centers)                  # every point starts with a label
-        self.labels[:] = lab
+        t0 = time.perf_counter()
+        lab, _ = self.nearest(self.centers)                  # every point starts with a label (the monitor needs it;
+        self.labels[:] = lab                                 # MiniBatchKMeans itself does not do this pass)
+        self.init_label_secs = time.perf_counter() - t0
 
     def nearest(self, C, inplace=False):
         from sklearn.cluster._kmeans import _labels_inertia

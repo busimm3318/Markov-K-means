@@ -26,3 +26,5 @@ experiments/results/accelerators_markov.csv
 experiments/results/accelerators_markov/
 experiments/results/accelerators_markov_pilot.csv
 experiments/results/accelerators_anytime_*.csv
+experiments/results/minibatch_markov_runs.csv
+experiments/results/minibatch_markov_pilot.csv
