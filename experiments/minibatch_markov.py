@@ -402,6 +402,75 @@ def report(path=OUT):
     return j
 
 
+METHOD_KO = (("markov", "Markov 적용 미니배치 (A)"), ("mb_plain", "미니배치 그대로 (배치 1024)"),
+             ("mb_avg10", "미니배치 + 최근 10 epoch 중심 평균"), ("mb_ema", "미니배치 + 중심 지수 평균"),
+             ("mb_b4096", "미니배치, 배치 4096"), ("mb_b16384", "미니배치, 배치 16384"),
+             ("sub_0.01", "표본 1% → 정확 K-means → 전체 할당"), ("sub_0.03", "표본 3% → 정확 K-means"),
+             ("sub_0.1", "표본 10% → 정확 K-means"), ("sub_0.3", "표본 30% → 정확 K-means"),
+             ("hamerly", "정확 Hamerly (증분), 아무 반복에서 멈춤"), ("lloyd", "정확 scikit-learn Lloyd, 아무 반복에서 멈춤"))
+
+
+def figure(path=OUT, out=None):
+    """Per target: each method's time to the target over the fastest method's, one dot per configuration."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from experiments.accelerators_markov import _korean_font
+    from experiments.analyze_markov_tail import FIG, GRID as GRIDLINE, INK, INK2, SERIES, SURFACE
+
+    plt.rcParams.update({"font.family": _korean_font(), "axes.unicode_minus": False, "figure.facecolor": SURFACE})
+    df = pd.read_csv(path)
+    df = df[~df.config.str.startswith("pilot")]
+    names = [m for m, _ in METHOD_KO]
+    T = {(c, m, e): time_to_target(h, e) for (c, m), h in df.groupby(["config", "method"]) for e in TARGETS}
+    configs = df.config.unique()
+    colour = {m: SERIES[0] if m == "markov" else SERIES[1] if m.startswith("mb_") else SERIES[2] if m.startswith("sub_")
+              else INK2 for m in names}
+    cap = 300.0
+    fig, axes = plt.subplots(1, 3, figsize=(16, 6.6), sharey=True)
+    rng = np.random.default_rng(0)
+    for ax, e in zip(axes, TARGETS):
+        ax.set_facecolor(SURFACE)
+        for i, m in enumerate(names):
+            r = []
+            for c in configs:
+                best = min(T.get((c, x, e), np.inf) for x in names)
+                t = T.get((c, m, e), np.inf)
+                if np.isfinite(best):
+                    r.append(min(t / best, cap))
+            r = np.array(r)
+            y = len(names) - 1 - i + rng.uniform(-0.18, 0.18, len(r))
+            ax.scatter(r, y, s=16, color=colour[m], alpha=0.75, edgecolor="none", zorder=3)
+            ok = r < cap
+            if ok.any():
+                med = np.median(r)
+                ax.plot([med, med], [len(names) - 1 - i - 0.32, len(names) - 1 - i + 0.32], color=INK, lw=2, zorder=4)
+            ax.text(cap * 1.12, len(names) - 1 - i, f"{ok.sum()}/{len(r)}", va="center", fontsize=8.5, color=INK2)
+        ax.set_xscale("log")
+        ax.set_xlim(0.8, cap * 1.6)
+        ax.axvline(cap, color=GRIDLINE, lw=6, zorder=1)
+        ax.set_xticks([1, 3, 10, 30, 100, cap])
+        ax.set_xticklabels(["1배\n(가장 빠름)", "3", "10", "30", "100", "도달\n못 함"])
+        ax.set_yticks(range(len(names)))
+        ax.set_yticklabels([k for _, k in METHOD_KO][::-1], fontsize=9.5)
+        ax.grid(True, axis="x", color=GRIDLINE, lw=0.8)
+        ax.tick_params(colors=INK2, labelsize=9)
+        ax.tick_params(axis="y", length=0)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+        ax.set_title(f"목표: SSE 초과 ≤ {e:.1%}".replace(".0%", "%"), loc="left", fontsize=11.5, color=INK, fontweight="bold")
+        ax.set_xlabel("목표에 도달한 시간 ÷ 그 구성에서 가장 빠른 방법의 시간 (로그)", color=INK2, fontsize=9.5)
+    fig.suptitle("미니배치 + Markov 층과 기존의 빠른 K-means: 목표 품질에 도달하는 시간 (점 하나 = 구성 하나, 세로 막대 = 중앙값, "
+                 "오른쪽 숫자 = 도달한 구성 수)", x=0.01, ha="left", fontsize=12.5, color=INK, fontweight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    out = out or os.path.join(FIG, "fig16_minibatch_markov.png")
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return out
+
+
 def run(grid=GRID, out=OUT):
     old = pd.read_csv(out) if os.path.exists(out) else None
     done = set(old.config) if old is not None else set()
@@ -427,3 +496,5 @@ if __name__ == "__main__":
         run()
     elif cmd == "report":
         report(sys.argv[2] if len(sys.argv) > 2 else OUT)
+    elif cmd == "figure":
+        print(figure())

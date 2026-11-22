@@ -522,8 +522,15 @@ def summary(df):
     return pd.DataFrame(out)
 
 
+def corrected():
+    """The 28 configurations with the nine re-run after the monitor fix put in place of the originals."""
+    df = pd.read_csv(OUT)
+    fixed = pd.read_csv(OUT_FIXED)
+    return pd.concat([df[~df.config.isin(set(fixed.config))], fixed], ignore_index=True)
+
+
 def report(path=OUT):
-    df = pd.read_csv(path)
+    df = corrected() if path == "corrected" else pd.read_csv(path)
     df = df[~df.config.str.startswith("pilot")]
     s = summary(df)
     pd.set_option("display.width", 250)
@@ -543,8 +550,9 @@ def report(path=OUT):
         best.append(dict(config=key, engine=r.engine, rule=r.rule, seconds=r.seconds, vs_fastest_full=r.seconds / fastest_full))
     best = pd.DataFrame(best)
     print(best.to_string(index=False))
-    s.to_csv(os.path.join(RESULTS, "accelerators_markov_summary.csv"), index=False)
-    best.to_csv(os.path.join(RESULTS, "accelerators_markov_fastest.csv"), index=False)
+    tag = "_corrected" if path == "corrected" else ""
+    s.to_csv(os.path.join(RESULTS, f"accelerators_markov_summary{tag}.csv"), index=False)
+    best.to_csv(os.path.join(RESULTS, f"accelerators_markov_fastest{tag}.csv"), index=False)
     return s, best
 
 
@@ -566,7 +574,7 @@ def _korean_font():
     return "NanumGothic"
 
 
-def figure(path=OUT, out=None):
+def figure(path="corrected", out=None):
     """Time against accuracy per accelerator: its own default stop -> with the Markov layer."""
     import matplotlib
 
@@ -577,8 +585,8 @@ def figure(path=OUT, out=None):
     from experiments.analyze_markov_tail import FIG, GRID as GRIDLINE, INK, INK2, SERIES, SURFACE
 
     plt.rcParams.update({"font.family": _korean_font(), "axes.unicode_minus": False, "figure.facecolor": SURFACE})
-    df = pd.read_csv(path)
-    df = df[~df.config.str.startswith("pilot")]
+    df = corrected() if path == "corrected" else pd.read_csv(path)
+    df = df[~df.config.str.startswith("pilot")].copy()
     df["time"] = 100 * df.seconds / df.full_seconds
     top = 1 - 2e-6
     df["acc"] = (1 - df.label_err).clip(0.5, top)
