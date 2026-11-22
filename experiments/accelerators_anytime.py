@@ -265,7 +265,10 @@ def figure(key="covtype-k64-s0", out=None, title=None):
                        lw=1.8, zorder=4)
         T = int(np.ceil(g.time_plain.max()))
         ax.set_xlim(0, T + 0.5)
-        ax.set_ylim(max(0, 100 * lo - 1.5), 100.4)
+        ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True, nbins=6))
+        span = 100 - 100 * lo
+        ax.set_ylim(max(0, 100 * lo - 0.06 * span), 100 + 0.04 * span)
+        ax.set_yticks([v for v in ax.get_yticks() if v <= 100 + 1e-9 and v >= ax.get_ylim()[0]])
         ax.set_title(f"{ENGINE_KO[eng]}  (수렴 {g.time_plain.max():.1f}초)", loc="left", fontsize=11, color=INK,
                      fontweight="bold")
         ax.grid(True, color=GRIDLINE, lw=0.8)
