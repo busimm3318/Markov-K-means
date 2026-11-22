@@ -77,6 +77,7 @@ import numpy as np
 from numba import njit, prange
 
 from . import _markov as _mk
+from ._kernels import _half_nearest_center
 
 STOP_RULES = ("auto", "monitor", "unstable")
 ASSIGN_RULES = ("auto", "oscillation", "history", "markov", "frequency", "keep")
@@ -168,12 +169,12 @@ def projected_changes(counts, window, n):
 
 
 def _half_nearest(C):
-    k = C.shape[0]
-    if k == 1:
-        return np.full(1, np.inf)
-    D = np.sqrt(((C[:, None, :] - C[None, :, :]) ** 2).sum(-1))
-    np.fill_diagonal(D, np.inf)
-    return 0.5 * D.min(1)
+    """Half the distance from each center to its nearest other center (inf for a single center).
+
+    Compiled pairwise loop: no (k, k, d) temporary, which at k = 256, d = 784 cost 0.27 s and
+    411 MB per iteration.
+    """
+    return _half_nearest_center(np.ascontiguousarray(C, dtype=np.float64))
 
 
 _CHUNKS = 64     # fixed work split of the parallel kernels: results never depend on the thread count

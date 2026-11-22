@@ -15,6 +15,12 @@ warns where that change would alter a run, as promised when the status became Be
   `stop_rule="unstable"` and `assign_rule="oscillation"` (or `"keep"`): no (W + 1) x n label
   ring, no per-iteration copy of the labels.
 
+### Fixed
+* The monitor's center drift (center step over half the distance to the nearest other
+  center) built a (k, k, d) temporary every iteration: 411 MB and 0.27 s per iteration at
+  k = 256, d = 784, longer than a whole Elkan iteration on MNIST. It now uses the compiled
+  pairwise loop of the Hamerly kernels (20 ms there; the values agree to 1e-15).
+
 ### Deprecated
 * `stop_rule="auto"` will mean `"unstable"` on exact engines (Hamerly, Lloyd) from 0.6; the
   extra tests of the full monitor rarely stop earlier there, and the projected-changes test
