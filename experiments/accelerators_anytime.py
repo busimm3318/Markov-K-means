@@ -40,6 +40,10 @@ from experiments.accelerators_markov import (ENGINE_KO, ENGINES, EXACT, MAX_ITER
 from markov_kmeans import _rules
 
 
+def _small(labels, k):
+    return np.asarray(labels).astype(np.uint8 if k <= 256 else np.uint16)
+
+
 def trace_exact(name, X, C0):
     n, k = X.shape[0], C0.shape[0]
     t0 = time.perf_counter()
@@ -51,7 +55,7 @@ def trace_exact(name, X, C0):
     t0 = time.perf_counter()
     mon.push(eng.labels, eng.centers)
     mon_s = time.perf_counter() - t0
-    plain, mk, rows = [eng.labels.astype(np.uint16)], [None], [dict(t=0, engine_s=secs, monitor_s=mon_s, finish_s=np.nan)]
+    plain, mk, rows = [_small(eng.labels, k)], [None], [dict(t=0, engine_s=secs, monitor_s=mon_s, finish_s=np.nan)]
     auto = None
     for t in range(1, MAX_ITER + 1):
         t0 = time.perf_counter()
@@ -67,11 +71,11 @@ def trace_exact(name, X, C0):
         mon_s += time.perf_counter() - t0
         if stop and auto is None:
             auto = t
-        plain.append(eng.labels.astype(np.uint16))
+        plain.append(_small(eng.labels, k))
         fin = np.nan
         lab = None
         if ch == 0:                                            # converged: MarkovKMeans returns these labels
-            fin, lab = 0.0, eng.labels.astype(np.uint16)
+            fin, lab = 0.0, _small(eng.labels, k)
         elif mon.t >= 2:
             c = clone(eng)                                     # not timed
             L = eng.labels.copy()
@@ -79,7 +83,7 @@ def trace_exact(name, X, C0):
             lab, _ = markov_finish(X, c, mon, L, k, "drift")
             fin = time.perf_counter() - t0
             del c
-            lab = lab.astype(np.uint16)
+            lab = _small(lab, k)
         mk.append(lab)
         rows.append(dict(t=t, engine_s=secs, monitor_s=mon_s, finish_s=fin))
         if ch == 0:
@@ -117,7 +121,7 @@ def trace_minibatch(X, C0, seed):
             t0 = time.perf_counter()
             lab, _ = eng.nearest(eng.centers)                  # MiniBatchKMeans' final labels_
             es = time.perf_counter() - t0
-            plain.append(lab.astype(np.uint16))
+            plain.append(_small(lab, k))
             mk.append(markov_lab)
             rows.append(dict(t=eng.step_i / spe, engine_s=secs, estep_s=es, monitor_s=mon_s, finish_s=fin))
 
@@ -148,7 +152,7 @@ def trace_minibatch(X, C0, seed):
                 t0 = time.perf_counter()
                 lab, _ = markov_finish(X, c, mon, L, k, regime if regime != "running" else "drift")
                 fin = time.perf_counter() - t0
-                lab = lab.astype(np.uint16)
+                lab = _small(lab, k)
             sample(lab, fin)
     ref = plain[-1]
     df = pd.DataFrame(rows)
@@ -170,16 +174,27 @@ def difficulty_key(sep):
 
 
 def run_difficulty(seps=None):
-    from kmeans_accel import datasets
+    """Each accelerator in its own process (its label snapshots are freed with it); finished ones are kept."""
+    import subprocess
 
-    warmup()
     for sep, _ in DIFFICULTY:
         if seps and sep not in seps:
             continue
-        X, _, _ = datasets.gmm(DIFF_N, 16, DIFF_K, sep=sep, seed=0)
-        run(None, DIFF_K, 0, X=np.ascontiguousarray(X), key=difficulty_key(sep), warm=False)
+        for e in ENGINES:
+            subprocess.run([sys.executable, "-u", "-m", "experiments.accelerators_anytime", "one", str(sep), e], check=True)
         print(figure(difficulty_key(sep), title=f"과제 난이도 {dict(DIFFICULTY)[sep]} (GMM 분리도 {sep:g}): "
                      f"n = 2,000,000, d = 16, k = {DIFF_K}"), flush=True)
+
+
+def run_one(sep, engine):
+    from kmeans_accel import datasets
+
+    key = difficulty_key(sep)
+    path = os.path.join(RESULTS, f"accelerators_anytime_{key}.csv")
+    if os.path.exists(path) and engine in set(pd.read_csv(path).engine):
+        return
+    X, _, _ = datasets.gmm(DIFF_N, 16, DIFF_K, sep=sep, seed=0)
+    run(None, DIFF_K, 0, engines=(engine,), X=np.ascontiguousarray(X), key=key)
 
 
 def run(name, k, seed, engines=ENGINES, X=None, key=None, warm=True):
@@ -191,7 +206,8 @@ def run(name, k, seed, engines=ENGINES, X=None, key=None, warm=True):
     C0, _ = kmeans_plusplus(X, k, random_state=seed)
     if warm:
         warmup()
-    out = []
+    path = os.path.join(RESULTS, f"accelerators_anytime_{key}.csv")
+    out = [pd.read_csv(path)] if os.path.exists(path) else []
     for e in engines:
         t0 = time.perf_counter()
         if e in EXACT:
@@ -203,7 +219,7 @@ def run(name, k, seed, engines=ENGINES, X=None, key=None, warm=True):
         out.append(df)
         last = df.iloc[-1]
         print(e, f"{len(df) - 1} iterations, end {last.time_plain:.1f}s, wall {time.perf_counter() - t0:.0f}s", flush=True)
-        pd.concat(out).to_csv(os.path.join(RESULTS, f"accelerators_anytime_{key}.csv"), index=False)
+        pd.concat(out).to_csv(path, index=False)
     return pd.concat(out)
 
 
@@ -280,7 +296,9 @@ def figure(key="covtype-k64-s0", out=None, title=None):
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "difficulty":
+    if sys.argv[1] == "one":
+        run_one(float(sys.argv[2]), sys.argv[3])
+    elif sys.argv[1] == "difficulty":
         run_difficulty([float(v) for v in sys.argv[2:]] or None)
     elif sys.argv[1] == "figure":
         print(figure(*sys.argv[2:3]))
