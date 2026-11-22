@@ -543,6 +543,87 @@ def report(path=OUT):
     return s, best
 
 
+FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-{}.ttf"
+
+
+def _korean_font():
+    """NanumGothic (OFL) for the Korean labels, fetched into data/fonts on first use."""
+    import urllib.request
+
+    from matplotlib import font_manager
+
+    os.makedirs(os.path.join(DATA, "fonts"), exist_ok=True)
+    for w in ("Regular", "Bold"):
+        f = os.path.join(DATA, "fonts", f"NanumGothic-{w}.ttf")
+        if not os.path.exists(f):
+            urllib.request.urlretrieve(FONT_URL.format(w), f)
+        font_manager.fontManager.addfont(f)
+    return "NanumGothic"
+
+
+def figure(path=OUT, out=None):
+    """Time against accuracy per accelerator: its own default stop -> with the Markov layer."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    from experiments.analyze_markov_tail import FIG, GRID as GRIDLINE, INK, INK2, SERIES, SURFACE
+
+    plt.rcParams.update({"font.family": _korean_font(), "axes.unicode_minus": False, "figure.facecolor": SURFACE})
+    df = pd.read_csv(path)
+    df = df[~df.config.str.startswith("pilot")]
+    df["time"] = 100 * df.seconds / df.full_seconds
+    top = 1 - 2e-6
+    df["acc"] = (1 - df.label_err).clip(0.5, top)
+    n_cfg = df.config.nunique()
+    DEF, MK = SERIES[1], SERIES[0]
+    fig, axes = plt.subplots(2, 4, figsize=(15, 7.6), sharex=True, sharey=True)
+    for ax, eng in zip(axes.ravel(), ENGINES):
+        g = df[df.engine == eng].pivot_table(index="config", columns="rule", values=["time", "acc"], aggfunc="first")
+        ax.set_facecolor(SURFACE)
+        for c in g.index:
+            ax.plot([g.time.default[c], g.time.markov[c]], [g.acc.default[c], g.acc.markov[c]], color=GRIDLINE,
+                    lw=1.2, zorder=1, solid_capstyle="round")
+        ax.scatter(g.time.default, g.acc.default, s=46, facecolor=SURFACE, edgecolor=DEF, lw=1.8, zorder=3)
+        ax.scatter(g.time.markov, g.acc.markov, s=46, color=MK, edgecolor=SURFACE, lw=1.0, zorder=4)
+        ax.scatter([100], [top], s=90, marker="*", color=INK, zorder=5)
+        md, mm = g.time.default.median(), g.time.markov.median()
+        ed, em = 1 - g.acc.default.median(), 1 - g.acc.markov.median()
+        ax.text(0.03, 0.97, f"중앙값\n기본 정지  시간 {md:.0f}% · 오차 {ed:.2%}\nMarkov     시간 {mm:.0f}% · 오차 {em:.2%}",
+                transform=ax.transAxes, fontsize=8.6, color=INK2, va="top", linespacing=1.45)
+        ax.set_title(ENGINE_KO[eng], loc="left", fontsize=11.5, color=INK, fontweight="bold")
+        ax.set_yscale("logit")
+        ax.set_ylim(0.6, 1 - 1e-6)
+        ax.set_yticks([0.7, 0.9, 0.99, 0.999, 0.9999, 0.99999, top])
+        ax.set_yticklabels(["70%", "90%", "99%", "99.9%", "99.99%", "99.999%", "100%"])
+        ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+        ax.set_xlim(-3, 112)
+        ax.set_xticks([0, 25, 50, 75, 100])
+        ax.grid(True, color=GRIDLINE, lw=0.8)
+        ax.tick_params(colors=INK2, labelsize=9)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+    for ax in axes[1]:
+        ax.set_xlabel("걸린 시간 (그 가속법을 끝까지 돌린 시간 대비, %)", color=INK2, fontsize=9.5)
+    for ax in axes[:, 0]:
+        ax.set_ylabel("정확도 (끝까지 돌린 결과와 같은 라벨 비율)", color=INK2, fontsize=9.5)
+    handles = [Line2D([], [], ls="", marker="o", ms=7, mfc=SURFACE, mec=DEF, mew=1.8,
+                      label="기존: 가속법 자체의 기본 정지 (scikit-learn tol = 1e-4, MiniBatch 조기 정지)"),
+               Line2D([], [], ls="", marker="o", ms=7, color=MK, label="Markov 적용 (0.6 기본 경로: 정지 + 의사 대표점)"),
+               Line2D([], [], ls="", marker="*", ms=10, color=INK, label="끝까지 (정확도 100% 기준)"),
+               Line2D([], [], color=GRIDLINE, lw=1.2, label="같은 구성끼리 연결")]
+    fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False, fontsize=9.5, labelcolor=INK2)
+    fig.suptitle(f"기존 가속법과 Markov 적용 가속법: 걸린 시간 대 정확도 (점 하나 = 구성 하나, {n_cfg}개 구성)",
+                 x=0.01, ha="left", fontsize=13, color=INK, fontweight="bold")
+    fig.tight_layout(rect=(0, 0.08, 1, 0.96))
+    out = out or os.path.join(FIG, "fig14_accelerators_markov.png")
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return out
+
+
 def pilot():
     return run(grid=[("pilot", None, None, 50, 0)], out=os.path.join(RESULTS, "accelerators_markov_pilot.csv"))
 
@@ -553,5 +634,7 @@ if __name__ == "__main__":
         pilot()
     elif cmd == "run":
         run(sys.argv[2:] or None)
+    elif cmd == "figure":
+        print(figure())
     elif cmd == "report":
         report(sys.argv[2] if len(sys.argv) > 2 else OUT)
