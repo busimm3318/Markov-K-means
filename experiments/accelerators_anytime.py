@@ -240,7 +240,9 @@ def figure(key="covtype-k64-s0", out=None):
     ds, rest = key.split("-k")
     fig.suptitle(f"시간–정확도 교환 곡선: {ds}, k = {rest.split('-')[0]} (1초 간격, 각 초에 그때까지 얻을 수 있는 가장 최근 결과)",
                  x=0.01, ha="left", fontsize=13, color=INK, fontweight="bold")
-    fig.tight_layout(rect=(0, 0.06, 1, 0.96))
+    fig.text(0.01, 0.935, "정확도 기준: 각 가속법 자신의 수렴 결과(MiniBatchKMeans는 100 epoch 뒤 결과). 0초에는 아직 결과가 없어 1초부터 찍힌다.",
+             fontsize=9.5, color=INK2)
+    fig.tight_layout(rect=(0, 0.06, 1, 0.93))
     out = out or os.path.join(FIG, f"fig15_anytime_{key}.png")
     fig.savefig(out, dpi=160)
     plt.close(fig)
