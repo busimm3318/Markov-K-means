@@ -407,6 +407,7 @@ footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--lin
     <li><b>오차:</b> 표류에서는 Markov 흡수가 다수결의 함정을 피하지만 유지보다 낫지 않고, 진동에서는 점유율·Markov가 유지보다 낫다.</li>
     <li><b>연속 해석:</b> 2개 군집 사이의 영구 진동에서만 실제 소속 비율이다. 그 밖에서는 불확실성 신호로 쓰거나, 거리 기반 soft 배정을 쓰는 편이 낫다.</li>
     <li><b>권장 사용처:</b> 라벨이 산출물이고 데이터가 매우 큰 K-means의 정지 규칙과 불확실성 표시, 상수 학습률·스트리밍 K-means의 진동 진단. 재구성 오차가 목표인 양자화에는 표본 학습이나 거리 기반 soft 배정이 낫다.</li>
+    <li><b>기존 가속법과의 결합 (results.md 15–16절):</b> scikit-learn Lloyd·Elkan, Hamerly, Yinyang, SQUAREM, Anderson, MiniBatchKMeans 위에 Markov 층을 붙인 사전 등록 실험(28개 구성)에서 유의미한 가속은 없었다. 시간 절감 중앙값은 Lloyd 10%, 증분 Hamerly −1%이고(기준 20%), 미니배치에 Markov 층을 붙여도 표본 추출·정확 Lloyd보다 앞선 구성은 0/28이다. Markov 층은 어느 가속법 위에서나 기본 정지보다 조금 늦게, 더 정확하게 멈춘다(라벨 오차 0.17% → 0.04%).</li>
   </ul>
   <div class="grid2">
     <div class="pattern"><div class="name">더 나은 외삽</div><div class="note">0.4의 의사 대표점은 외삽을 ρ ≤ 0.95로 자른다. 아직 수렴점에서 먼 대표점을 상한 없이 안전하게 외삽하는 방법(경로 전체의 감쇠율, Anderson식 혼합)을 시험한다.</div></div>
