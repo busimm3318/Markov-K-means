@@ -81,6 +81,9 @@ from markov_kmeans.estimator import pseudo_finish
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 OUT = os.path.join(RESULTS, "accelerators_markov.csv")
+# configurations re-run after the monitor fix (center drift without a (k, k, d) temporary): those where the
+# old computation exceeded 2 % of an accelerator's full time (covtype k = 256, MNIST k = 64 and 256)
+OUT_FIXED = os.path.join(RESULTS, "accelerators_markov_fixed.csv")
 CURVES = os.path.join(RESULTS, "accelerators_markov")         # per-iteration times (not committed)
 EXACT = ("sk_lloyd", "sk_elkan", "hamerly", "yinyang", "hamerly_pkg", "squarem", "anderson")
 ENGINES = EXACT + ("sk_minibatch",)
@@ -636,6 +639,9 @@ if __name__ == "__main__":
         pilot()
     elif cmd == "run":
         run(sys.argv[2:] or None)
+    elif cmd == "rerun":                                  # after the monitor fix, into OUT_FIXED
+        keys = set(sys.argv[2:])
+        run(grid=[c for c in GRID if config_key(*c) in keys], out=OUT_FIXED)
     elif cmd == "figure":
         print(figure())
     elif cmd == "report":
