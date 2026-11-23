@@ -31,3 +31,5 @@ experiments/results/minibatch_markov_pilot.csv
 experiments/results/accelerators_markov_fixed.csv
 experiments/results/floor_markov.csv
 experiments/results/floor_markov_pilot.csv
+experiments/results/stability_markov.csv
+experiments/results/stability_markov_pilot.csv
