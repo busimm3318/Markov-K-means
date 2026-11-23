@@ -273,6 +273,65 @@ def report(path=OUT):
     return j
 
 
+BASE_KO = {"const2e-4": "고정 학습률 2e-4", "const1e-3": "고정 학습률 1e-3", "count": "1/count"}
+
+
+def figure(path=OUT, out=None):
+    """Churn and run-to-run disagreement of each stabilizer over the base's, one dot per configuration."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from experiments.accelerators_markov import _korean_font
+    from experiments.analyze_markov_tail import FIG, GRID as GRIDLINE, INK, INK2, SERIES, SURFACE
+
+    plt.rcParams.update({"font.family": _korean_font(), "axes.unicode_minus": False, "figure.facecolor": SURFACE})
+    j = judge(pd.read_csv(path))
+    j = j[~j.config.str.startswith("pilot")]
+    meths = (("markov", "Markov 층", SERIES[0]), ("avg10", "중심 평균 (10 epoch)", SERIES[1]),
+             ("ema", "중심 지수 평균", SERIES[3]), ("hyst3", "히스테리시스 (3회 확인)", SERIES[2]),
+             ("polish1", "정확 Lloyd 1회 다듬기", INK2))
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5.8))
+    rng = np.random.default_rng(2)
+    for ax, (metric, title) in zip(axes, (("churn", "보고 사이 흔들림 (11–100 epoch 평균)"),
+                                          ("dis", "실행 간 어긋남 (미니배치 순서만 다른 두 실행, 100 epoch)"))):
+        ax.set_facecolor(SURFACE)
+        for bi, b in enumerate(BASE_KO):
+            g = j[j.base == b]
+            for mi, (m, label, col) in enumerate(meths):
+                if metric == "churn" and m == "polish1":
+                    continue
+                v = (g[f"{metric}_{m}"] / g[f"{metric}_base"]).clip(0.05, 4)
+                x = bi * (len(meths) + 1.5) + mi + rng.uniform(-0.18, 0.18, len(v))
+                ax.scatter(x, v, s=22, color=col, alpha=0.85, edgecolor="none", zorder=3, label=label if bi == 0 else None)
+                ax.plot([x.mean() - 0.3, x.mean() + 0.3], [np.median(v)] * 2, color=INK, lw=2, zorder=4)
+            ax.text(bi * (len(meths) + 1.5) + 2, 4.6, BASE_KO[b], ha="center", va="bottom", fontsize=10, color=INK)
+        ax.axhline(1.0, color=INK2, lw=1.2, ls="--", zorder=2)
+        ax.axhline(0.5, color=SERIES[2], lw=1.0, ls=":", zorder=2)
+        ax.set_yscale("log")
+        ax.set_ylim(0.04, 7)
+        ax.set_yticks([0.05, 0.1, 0.25, 0.5, 1, 2, 4])
+        ax.set_yticklabels(["0.05", "0.1", "0.25", "0.5 (기준)", "1 (그대로)", "2", "4"])
+        ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+        ax.set_xticks([])
+        ax.grid(True, axis="y", color=GRIDLINE, lw=0.8)
+        ax.tick_params(colors=INK2, labelsize=9)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+        ax.set_title(title, loc="left", fontsize=11.5, color=INK, fontweight="bold", pad=30)
+        ax.set_ylabel("÷ 가속법 그대로의 값 (로그, 낮을수록 안정)", color=INK2, fontsize=9.5)
+    h, l = axes[1].get_legend_handles_labels()
+    fig.legend(h, l, loc="lower center", ncol=5, frameon=False, fontsize=9.5, labelcolor=INK2)
+    fig.suptitle("라벨 안정화: 미니배치 라벨을 얼마나 덜 흔들리고 더 재현되게 하나 (점 하나 = 구성 하나, 가로 막대 = 중앙값)",
+                 x=0.01, ha="left", fontsize=12.5, color=INK, fontweight="bold")
+    fig.tight_layout(rect=(0, 0.07, 1, 0.95))
+    out = out or os.path.join(FIG, "fig19_label_stability.png")
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return out
+
+
 def run(grid=GRID, out=OUT):
     old = pd.read_csv(out) if os.path.exists(out) else None
     done = set(old.config) if old is not None else set()
@@ -298,3 +357,5 @@ if __name__ == "__main__":
         run()
     elif cmd == "report":
         report(sys.argv[2] if len(sys.argv) > 2 else OUT)
+    elif cmd == "figure":
+        print(figure())
