@@ -275,6 +275,70 @@ def report(path=OUT):
     return j
 
 
+BASE_KO = {"const2e-4": "고정 학습률 2e-4", "const1e-3": "고정 학습률 1e-3", "count": "1/count (대조군)"}
+
+
+def figure(path=OUT, out=None):
+    """Each answer at the Markov stop over the base's own floor, per reference (counted configurations)."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from experiments.accelerators_markov import _korean_font
+    from experiments.analyze_markov_tail import FIG, GRID as GRIDLINE, INK, INK2, SERIES, SURFACE
+
+    plt.rcParams.update({"font.family": _korean_font(), "axes.unicode_minus": False, "figure.facecolor": SURFACE})
+    j = judge(pd.read_csv(path))
+    j = j[~j.config.str.startswith("pilot")]
+    methods = (("markov", "Markov 층", SERIES[0]), ("avg10", "중심 평균 (10 epoch)", SERIES[1]),
+               ("ema", "중심 지수 평균", SERIES[3]), ("polish1", "정확 Lloyd 1회 다듬기", INK2),
+               ("polish3", "정확 Lloyd 3회 다듬기", INK))
+    fig, axes = plt.subplots(1, 2, figsize=(14.5, 5.6), sharey=False)
+    rng = np.random.default_rng(1)
+    for ax, (suffix, floor_col, counted, title) in zip(axes, (
+            ("", "floor", "counted", "주 기준: 정확 K-means 해에 대한 SSE 초과"),
+            ("_r2", "floor_r2", "counted_r2", "보조 기준: 가속법 자신의 장기 최빈 라벨과의 불일치"))):
+        ax.set_facecolor(SURFACE)
+        bases = list(BASE_KO)
+        for bi, b in enumerate(bases):
+            g = j[(j.base == b) & j[counted]]
+            for mi, (m, label, col) in enumerate(methods):
+                v = (g[m + suffix] / g[floor_col]).clip(0.02, 3)
+                x = bi * (len(methods) + 1.5) + mi + rng.uniform(-0.18, 0.18, len(v))
+                ax.scatter(x, v, s=22, color=col, alpha=0.85, edgecolor="none", zorder=3,
+                           label=label if bi == 0 else None)
+                if len(v):
+                    ax.plot([x.mean() - 0.3, x.mean() + 0.3], [np.median(v)] * 2, color=INK, lw=2, zorder=4)
+            ax.text(bi * (len(methods) + 1.5) + 2, 3.6, f"{BASE_KO[b]}\n(판정 대상 {len(g)}개)", ha="center", va="bottom",
+                    fontsize=9.5, color=INK)
+        ax.axhline(1.0, color=INK2, lw=1.2, ls="--", zorder=2)
+        ax.axhline(0.75, color=SERIES[2], lw=1.2, zorder=2)
+        ax.text(ax.get_xlim()[1] if False else len(bases) * (len(methods) + 1.5) - 1.2, 0.75, "기준 (i): 바닥의 0.75배",
+                color=SERIES[2], fontsize=8.8, ha="right", va="top")
+        ax.set_yscale("log")
+        ax.set_ylim(0.03, 6)
+        ax.set_yticks([0.05, 0.1, 0.25, 0.5, 0.75, 1, 2])
+        ax.set_yticklabels(["0.05", "0.1", "0.25", "0.5", "0.75", "1 (바닥)", "2"])
+        ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+        ax.set_xticks([])
+        ax.grid(True, axis="y", color=GRIDLINE, lw=0.8)
+        ax.tick_params(colors=INK2, labelsize=9)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+        ax.set_title(title, loc="left", fontsize=11.5, color=INK, fontweight="bold", pad=34)
+        ax.set_ylabel("Markov 정지 시점의 값 ÷ 가속법 혼자 도달한 최선값 (로그)", color=INK2, fontsize=9.5)
+    h, l = axes[0].get_legend_handles_labels()
+    fig.legend(h, l, loc="lower center", ncol=5, frameon=False, fontsize=9.5, labelcolor=INK2)
+    fig.suptitle("가속법 혼자로는 못 가는 정확도: 1보다 아래면 바닥을 넘은 것 (점 하나 = 구성 하나, 가로 막대 = 중앙값, 3배 이상은 3에 표시)",
+                 x=0.01, ha="left", fontsize=12.5, color=INK, fontweight="bold")
+    fig.tight_layout(rect=(0, 0.07, 1, 0.95))
+    out = out or os.path.join(FIG, "fig18_floor_markov.png")
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return out
+
+
 def run(grid=GRID, out=OUT):
     old = pd.read_csv(out) if os.path.exists(out) else None
     done = set(old.config) if old is not None else set()
@@ -300,3 +364,5 @@ if __name__ == "__main__":
         run()
     elif cmd == "report":
         report(sys.argv[2] if len(sys.argv) > 2 else OUT)
+    elif cmd == "figure":
+        print(figure())
