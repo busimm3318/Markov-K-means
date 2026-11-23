@@ -637,6 +637,101 @@ def figure(path="corrected", out=None):
     return out
 
 
+def tradeoff_figure(dense_key="covtype-k64-s0", out=None):
+    """Added time against accuracy gained, from each accelerator's own default stop.
+
+    Per configuration: the accelerator simply run on (grey: its default stop -> the threshold
+    stop -> the Markov stop iteration -> convergence, all plain labels of its own trajectory) and
+    the Markov layer (blue: the same stop plus the pseudo representative step). x is the time
+    beyond the default stop, as a share of the full run; y the share of the default stop's label
+    error removed. The thick curves are one configuration iteration by iteration
+    (experiments/accelerators_anytime.py).
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    from experiments.analyze_markov_tail import FIG, GRID as GRIDLINE, INK, INK2, SERIES, SURFACE
+
+    plt.rcParams.update({"font.family": _korean_font(), "axes.unicode_minus": False, "figure.facecolor": SURFACE})
+    df = corrected()
+    df = df[~df.config.str.startswith("pilot")]
+    w = df.pivot_table(index=["config", "engine"], columns="rule", values=["seconds", "label_err", "iterations", "steps"],
+                       aggfunc="first")
+    S, E = w.seconds, w.label_err
+    X = {r: 100 * (S[r] - S.default) / S.full for r in RULES}
+    Y = {r: 100 * (E.default - E[r]) / E.default for r in RULES}
+    ok = (E.default > 0) & (S.full > S.default)
+    dense = pd.read_csv(os.path.join(RESULTS, f"accelerators_anytime_{dense_key}.csv"))
+    MK = SERIES[0]
+    lo_y = -40
+    fig, axes = plt.subplots(2, 4, figsize=(15.5, 8.2), sharey=True)
+    for ax, eng in zip(axes.ravel(), ENGINES):
+        ax.set_facecolor(SURFACE)
+        keys = [c for c, e in ok.index if e == eng and ok[(c, e)]]
+        above = 0
+        for c in keys:
+            pts = sorted({(float(X[r][(c, eng)]), float(Y[r][(c, eng)])) for r in ("default", "threshold", "markov_stop", "full")
+                          if np.isfinite(X[r][(c, eng)])})
+            xs, ys = zip(*pts)
+            ax.plot(xs, np.maximum(ys, lo_y), color=GRIDLINE, lw=1.1, zorder=1)
+            xm, ym = float(X["markov"][(c, eng)]), float(Y["markov"][(c, eng)])
+            above += ym > np.interp(xm, xs, ys) + 1e-9
+            ax.scatter([xm], [max(ym, lo_y)], s=26, color=MK, edgecolor=SURFACE, lw=0.6, zorder=3,
+                       marker="o" if ym >= lo_y else "v")
+        # one configuration iteration by iteration
+        g = dense[dense.engine == eng].sort_values("t")
+        if len(g) and (dense_key, eng) in w.index:
+            if eng == "sk_minibatch":
+                td = float(w.steps.loc[(dense_key, eng), "default"])
+                spe = float(w.steps.loc[(dense_key, eng), "full"]) / 100.0
+                g0 = g[g.t >= td / spe]
+            else:
+                g0 = g[g.t >= int(w.iterations.loc[(dense_key, eng), "default"])]
+            if len(g0):
+                T = float(g.time_plain.max())
+                t0, e0 = float(g0.time_plain.iloc[0]), 1 - float(g0.acc_plain.iloc[0])
+                if e0 > 0:
+                    ax.plot(100 * (g0.time_plain - t0) / T, 100 * (e0 - (1 - g0.acc_plain)) / e0, color=INK, lw=2.2, zorder=4)
+                    gm = g0.dropna(subset=["acc_markov"])
+                    ax.plot(100 * (gm.time_markov - t0) / T, np.maximum(100 * (e0 - (1 - gm.acc_markov)) / e0, lo_y),
+                            color=MK, lw=2.2, zorder=5)
+        xm_med = float(np.median([X["markov"][(c, eng)] for c in keys]))
+        ym_med = float(np.median([Y["markov"][(c, eng)] for c in keys]))
+        ax.text(0.97, 0.05, f"Markov 중앙값: 시간 +{xm_med:.0f}%, 오차 -{ym_med:.0f}%\n"
+                f"그냥 더 돌린 선보다 위: {above}/{len(keys)}개 구성",
+                transform=ax.transAxes, ha="right", va="bottom", fontsize=8.8, color=INK2, linespacing=1.5,
+                bbox=dict(facecolor=SURFACE, edgecolor="none", pad=2))
+        ax.set_title(ENGINE_KO[eng], loc="left", fontsize=11.5, color=INK, fontweight="bold")
+        ax.set_xlim(-5, 105)
+        ax.set_ylim(lo_y - 5, 105)
+        ax.axhline(0, color=GRIDLINE, lw=1.0)
+        ax.grid(True, color=GRIDLINE, lw=0.8)
+        ax.tick_params(colors=INK2, labelsize=9)
+        ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"+{v:g}%" if v > 0 else f"{v:g}%"))
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:g}%"))
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+    for ax in axes[1]:
+        ax.set_xlabel("추가되는 시간 (기본 정지 이후, 끝까지 돌린 시간 대비)", color=INK2, fontsize=9.5)
+    for ax in axes[:, 0]:
+        ax.set_ylabel("향상되는 정확도 (기본 정지의 라벨 오차 중 줄인 비율)", color=INK2, fontsize=9.5)
+    handles = [Line2D([], [], color=GRIDLINE, lw=1.4, label="가속법을 그냥 더 돌림 (구성 하나: 기본 정지 → 임계값 정지 → Markov 정지 반복 → 끝까지)"),
+               Line2D([], [], ls="", marker="o", ms=6, color=MK, label="Markov 적용 (정지 + 의사 대표점, 구성 하나; ▼ = -40% 아래)"),
+               Line2D([], [], color=INK, lw=2.2, label=f"그냥 더 돌림, 반복마다 ({dense_key.replace('-', ' ')})"),
+               Line2D([], [], color=MK, lw=2.2, label="그 반복에서 Markov 마무리 적용, 반복마다 (같은 구성)")]
+    fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False, fontsize=9.3, labelcolor=INK2)
+    fig.suptitle("가속법 + Markov: 추가되는 시간과 향상되는 정확도 (기준 = 각 가속법 자체의 기본 정지, 28개 구성)",
+                 x=0.01, ha="left", fontsize=13, color=INK, fontweight="bold")
+    fig.tight_layout(rect=(0, 0.08, 1, 0.96))
+    out = out or os.path.join(FIG, "fig17_accelerators_tradeoff.png")
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return out
+
+
 def pilot():
     return run(grid=[("pilot", None, None, 50, 0)], out=os.path.join(RESULTS, "accelerators_markov_pilot.csv"))
 
@@ -652,5 +747,7 @@ if __name__ == "__main__":
         run(grid=[c for c in GRID if config_key(*c) in keys], out=OUT_FIXED)
     elif cmd == "figure":
         print(figure())
+    elif cmd == "tradeoff":
+        print(tradeoff_figure())
     elif cmd == "report":
         report(sys.argv[2] if len(sys.argv) > 2 else OUT)

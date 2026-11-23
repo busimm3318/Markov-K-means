@@ -1530,7 +1530,7 @@ python -m experiments.meanshift_segmentation 256      # 14절 평균이동 분�
 python -m experiments.meanshift_segmentation report   # 14절 판정 (사전 기준)
 python -m experiments.accelerators_markov run       # 15절 기존 가속법 8개 × 정지 규칙 5개 (28개 구성, 약 5시간; data/에 covtype·MNIST·USCensus1990)
 python -m experiments.accelerators_markov rerun covtype-k256-s0 ...   # 15절 감시기 수정 뒤 재실행 (9개 구성)
-python -m experiments.accelerators_markov report corrected   # 15절 보정 판정 (figure: 그림)
+python -m experiments.accelerators_markov report corrected   # 15절 보정 판정 (figure, tradeoff: 그림)
 python -m experiments.accelerators_anytime covtype 64 0      # 15절 시간–정확도 곡선 (difficulty: 난이도 4단계)
 python -m experiments.minibatch_markov run          # 16절 미니배치 비교 (28개 구성, 약 5시간)
 python -m experiments.minibatch_markov report       # 16절 판정 (figure: 그림)
@@ -1642,6 +1642,13 @@ Anderson에서는 차이가 더 크다(기본 정지 2.2%, 최대 37% → Markov
 ![시간–정확도 곡선, 매우 어려운 과제 (분리도 0.5)](figures/fig15_anytime_gmm2e6-sep0.5-k50-s0.png)
 
 (분리도 4·2·1 그림: `docs/figures/fig15_anytime_gmm2e6-sep{4,2,1}-k50-s0.png`)
+
+**추가되는 시간과 향상되는 정확도.** 각 가속법의 기본 정지를 출발점으로, Markov 층이 더 쓰는 시간(끝까지 시간 대비)과 그동안 줄이는 라벨 오차(기본 정지의 오차 대비)를 같은 가속법을 그냥 더 돌린 경우와 겹쳐 그렸다(`python -m experiments.accelerators_markov tradeoff`). 회색 선은 구성마다 그 가속법 자신의 궤적(기본 정지 → 임계값 정지 → Markov 정지 반복 → 끝까지)을 이은 것이고, 굵은 선은 covtype k = 64를 반복마다 본 것이다.
+* Markov 층은 기본 정지 대비 오차를 중앙값으로 82% 줄이고(SQUAREM 90%, Anderson 95%), 끝까지 시간의 6–14%를 더 쓴다(Anderson 26%, MiniBatchKMeans 96%).
+* 그 점들은 대부분 "그냥 더 돌린" 선 위나 그 아래에 있다. 선보다 위에 있는 구성은 정확 엔진에서 21개 중 5–7개, Anderson 26개 중 13개, MiniBatchKMeans 28개 중 11개다. 회색 선은 측정점 사이를 직선으로 이은 것이라 실제 곡선(위로 볼록)보다 낮으므로, 이 수는 Markov 층에 유리한 쪽으로 센 것이다.
+* 반복마다 본 곡선에서도 Lloyd·Elkan은 Markov 마무리가 초반에 5–10%p 앞서다가 곧 겹치고, 증분 Hamerly·Yinyang은 마무리 비용만큼 오른쪽으로 밀린다. 곡선 자체가 분명히 위로 올라간 것은 MiniBatchKMeans(약 10%p)뿐이다.
+
+![가속법 + Markov: 추가되는 시간과 향상되는 정확도](figures/fig17_accelerators_tradeoff.png)
 
 **부수 결과**
 * 가장 빠른 정확 가속법은 데이터마다 다르다: 증분 Hamerly 10개, scikit-learn Elkan 9개(주로 MNIST처럼 d가 큰 경우), Yinyang 8개, Lloyd 1개 구성.
